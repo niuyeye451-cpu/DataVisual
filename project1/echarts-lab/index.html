@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>冬奥会奖牌数据可视化</title>
+    <link rel="icon" href="/favicon.svg" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>🏂 冬奥会奖牌榜数据全景看板</h1>
+      <div class="controls">
+        <button id="sort-btn" class="btn">🔄 当前：降序排列</button>
+      </div>
+    </header>
+    
+    <div class="dashboard">
+      <!-- 柱状图变宽，用于展示所有国家并支持滚动 -->
+      <div id="chart-bar" class="chart-container-large"></div>
+      <!-- 饼图保持适中 -->
+      <div id="chart-pie" class="chart-container-small"></div>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

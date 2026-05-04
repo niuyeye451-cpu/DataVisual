@@ -1,0 +1,52 @@
+/* ================= 基础样式 ================= */
+body, html {
+    margin: 0; padding: 0; height: 100%;
+    background-color: #f4f6f9;
+    font-family: 'Microsoft YaHei', sans-serif;
+}
+
+/* 表现层：基于 CSS Grid 的二维网格布局 */
+#dashboard {
+    width: 100vw; height: 100vh;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 15px; padding: 15px; box-sizing: border-box;
+}
+
+/* ================= 拖拽与容器样式 ================= */
+.grid-item {
+    display: flex; flex-direction: column;
+    background-color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+/* 拖拽状态反馈样式 */
+.grid-item.dragging {
+    opacity: 0.6;
+    box-shadow: 0 8px 16px rgba(84, 112, 198, 0.4);
+    transform: scale(0.98);
+}
+.grid-item.drag-over {
+    border: 2px dashed #5470C6;
+    background-color: #f8faff;
+}
+
+/* 顶部拖拽手柄 */
+.drag-handle {
+    background-color: #f8f9fa; color: #888;
+    text-align: center; padding: 4px 0; font-size: 12px;
+    cursor: grab; user-select: none;
+    border-bottom: 1px solid #eee; letter-spacing: 2px;
+}
+.drag-handle:active { cursor: grabbing; }
+
+/* 图表实际挂载区域 */
+.chart-container {
+    flex: 1; 
+    width: 100%; height: 100%;
+    padding: 10px; box-sizing: border-box;
+}

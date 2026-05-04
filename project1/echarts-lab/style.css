@@ -1,0 +1,68 @@
+body {
+  margin: 0;
+  padding: 0 20px 40px 20px;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  background-color: #f0f2f5;
+  color: #333;
+}
+
+header {
+  text-align: center;
+  padding: 20px 0;
+}
+
+header h1 {
+  margin: 0 0 15px 0;
+  color: #1890ff;
+}
+
+.controls {
+  margin-bottom: 20px;
+}
+
+.btn {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: bold;
+  color: #fff;
+  background-color: #1890ff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.btn:hover {
+  background-color: #40a9ff;
+}
+
+/* 看板布局：垂直居中排列 */
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30px;
+}
+
+/* 柱状图容器 - 加宽以适应滚动 */
+.chart-container-large {
+  width: 95%;
+  max-width: 1400px;
+  height: 500px;
+  background-color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  padding: 20px;
+}
+
+/* 饼图容器 */
+.chart-container-small {
+  width: 95%;
+  max-width: 800px;
+  height: 450px;
+  background-color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  padding: 20px;
+}

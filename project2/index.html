@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>世界杯数据可视化大屏 - Lab2</title>
+    
+    <!-- 1. 引入 ECharts 核心库 -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    
+    <!-- 2. 引入独立的 CSS 样式表 -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- 结构层：HTML DOM 树构建 -->
+    <div id="dashboard">
+        <div class="grid-item" draggable="true">
+            <div class="drag-handle">≡ 拖动交换位置 ≡</div>
+            <div id="chart1" class="chart-container"></div>
+        </div>
+        <div class="grid-item" draggable="true">
+            <div class="drag-handle">≡ 拖动交换位置 ≡</div>
+            <div id="chart2" class="chart-container"></div>
+        </div>
+        <div class="grid-item" draggable="true">
+            <div class="drag-handle">≡ 拖动交换位置 ≡</div>
+            <div id="chart3" class="chart-container"></div>
+        </div>
+        <div class="grid-item" draggable="true">
+            <div class="drag-handle">≡ 拖动交换位置 ≡</div>
+            <div id="chart4" class="chart-container"></div>
+        </div>
+    </div>
+
+    <!-- 3. 引入独立的 JavaScript 逻辑文件 (放在 body 末尾确保 DOM 已加载) -->
+    <script src="main.js"></script>
+</body>
+</html>
