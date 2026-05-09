@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>电力负荷预测可视化分析 - 模型分析</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+                  "tertiary-fixed-dim": "#ffb59b",
+                  "primary": "#003d9b",
+                  "background": "#faf8ff",
+                  "tertiary-container": "#a33500",
+                  "surface-container": "#ededf8",
+                  "on-primary": "#ffffff",
+                  "secondary-fixed": "#afecff",
+                  "on-primary-fixed-variant": "#0040a2",
+                  "on-background": "#191b23",
+                  "inverse-on-surface": "#f0f0fb",
+                  "load-forecast": "#FF8B00",
+                  "on-tertiary-container": "#ffc6b2",
+                  "load-actual": "#2684FF",
+                  "secondary": "#00687b",
+                  "outline": "#737685",
+                  "primary-container": "#0052cc",
+                  "primary-fixed-dim": "#b2c5ff",
+                  "primary-fixed": "#dae2ff",
+                  "success-metrics": "#36B37E",
+                  "on-surface-variant": "#434654",
+                  "inverse-surface": "#2e3038",
+                  "inverse-primary": "#b2c5ff",
+                  "surface-bright": "#faf8ff",
+                  "surface-dim": "#d9d9e4",
+                  "neutral-surface": "#F4F5F7",
+                  "error-high": "#DE350B",
+                  "error": "#ba1a1a",
+                  "surface-container-lowest": "#ffffff",
+                  "surface-container-highest": "#e1e2ec",
+                  "surface-variant": "#e1e2ec",
+                  "on-primary-container": "#c4d2ff",
+                  "outline-variant": "#c3c6d6",
+                  "on-tertiary-fixed": "#380d00",
+                  "on-error": "#ffffff",
+                  "error-container": "#ffdad6",
+                  "on-secondary-container": "#005f71",
+                  "load-primary": "#0052CC",
+                  "surface-container-low": "#f3f3fd",
+                  "secondary-container": "#50dcff",
+                  "on-secondary-fixed-variant": "#004e5d",
+                  "on-secondary-fixed": "#001f27",
+                  "on-surface": "#191b23",
+                  "on-tertiary": "#ffffff",
+                  "on-primary-fixed": "#001848",
+                  "surface": "#faf8ff",
+                  "on-secondary": "#ffffff",
+                  "surface-tint": "#0c56d0",
+                  "on-tertiary-fixed-variant": "#812800",
+                  "on-error-container": "#93000a",
+                  "tertiary-fixed": "#ffdbcf",
+                  "tertiary": "#7b2600",
+                  "secondary-fixed-dim": "#48d7f9",
+                  "surface-container-high": "#e7e7f2"
+          },
+          "borderRadius": {
+                  "DEFAULT": "0.125rem",
+                  "lg": "0.25rem",
+                  "xl": "0.5rem",
+                  "full": "0.75rem"
+          },
+          "spacing": {
+                  "margin-page": "24px",
+                  "gutter": "16px",
+                  "card-padding": "20px",
+                  "unit": "4px"
+          },
+          "fontFamily": {
+                  "headline-lg": ["IBM Plex Sans"],
+                  "body-base": ["Inter"],
+                  "headline-md": ["IBM Plex Sans"],
+                  "body-sm": ["Inter"],
+                  "data-mono": ["JetBrains Mono"]
+          },
+          "fontSize": {
+                  "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                  "body-base": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                  "headline-md": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+                  "body-sm": ["12px", { "lineHeight": "18px", "fontWeight": "400" }],
+                  "data-mono": ["13px", { "lineHeight": "16px", "fontWeight": "500" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    /* Add subtle shadow for interactive elements per style guide */
+    .interactive-hover:hover {
+      box-shadow: 0 4px 8px rgba(9, 30, 66, 0.08);
+    }
+    
+    /* ECharts placeholder styling */
+    .echarts-placeholder {
+      background-image: linear-gradient(135deg, #f0f0fb 25%, transparent 25%, transparent 50%, #f0f0fb 50%, #f0f0fb 75%, transparent 75%, transparent);
+      background-size: 20px 20px;
+      border: 1px dashed #c3c6d6;
+    }
+    
+    body {
+      background-color: #F4F5F7; /* neutral-surface per style guide */
+    }
+  </style>
+</head>
+<body class="font-body-base text-body-base text-on-surface antialiased">
+<!-- SideNavBar -->
+<nav class="w-60 h-screen fixed left-0 top-0 bg-surface-container-low border-r border-outline-variant flex flex-col h-full py-spacing-margin-page">
+<div class="px-6 mb-8 flex items-center space-x-3">
+<div class="w-8 h-8 rounded-lg bg-primary text-on-primary flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">electric_bolt</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md text-primary truncate">Grid Analytics</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Load Forecast v2.1</p>
+</div>
+</div>
+<div class="flex-1 px-4 space-y-1">
+<a class="flex items-center space-x-3 px-3 py-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors duration-200 active:scale-95 transition-transform rounded-lg" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span>Data Overview</span>
+</a>
+<a class="flex items-center space-x-3 px-3 py-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors duration-200 active:scale-95 transition-transform rounded-lg" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span>Feature Exploration</span>
+</a>
+<a class="flex items-center space-x-3 px-3 py-2 text-primary font-bold bg-primary-fixed rounded-lg active:scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">query_stats</span>
+<span>Model Analysis</span>
+</a>
+</div>
+<div class="px-4 mt-auto">
+<div class="flex items-center space-x-3 px-3 py-2">
+<img alt="User Profile" class="w-8 h-8 rounded-full border border-outline-variant" data-alt="A small, circular avatar portrait of a professional analyst against a neutral background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCs_DqyFwli4VpQtdJWxA7NWznrdKdl5xy4ouBNLbSFfaLDHiSn2UvUJoAyrxVuo8pviJ7CWw3d5FlF2c8bDMOsewnisP9kn0PTcqDSZWi8bFMnYbAJJf8cIrr7Gxm7hlbKdgQyjfu5mXrhF6TLUXN35cdAzV1legH5fUeEDlgQnv-4WEVMCehv-8bccfCeqZCiwOi165B8ou4sVTk3LmHx7uPd7UjsuAbrZm7LvgmbQh0JR_hyc5K4saQM9qhBR8p514NfwVtwtZkF"/>
+<div class="flex-1 min-w-0">
+<p class="font-body-sm text-body-sm font-medium text-on-surface truncate">Admin User</p>
+</div>
+</div>
+</div>
+</nav>
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 w-[calc(100%-240px)] h-16 z-50 bg-surface border-b border-outline-variant flex justify-between items-center px-gutter">
+<div class="font-headline-lg text-headline-lg font-bold text-on-surface flex items-center">
+      电力负荷预测可视化分析
+    </div>
+<div class="flex items-center space-x-4">
+<div class="relative group">
+<input class="w-64 h-9 pl-10 pr-4 bg-surface-container-low border border-outline-variant rounded-full text-body-base focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" placeholder="Search..." type="text"/>
+<span class="material-symbols-outlined absolute left-3 top-2 text-on-surface-variant group-focus-within:text-primary">search</span>
+</div>
+<div class="flex items-center space-x-2">
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all active:opacity-80">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all active:opacity-80">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all active:opacity-80">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="ml-60 mt-16 p-margin-page min-h-screen">
+<div class="mb-6 flex justify-between items-end">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-1">模型分析 (Model Analysis)</h2>
+<p class="font-body-base text-on-surface-variant">评估不同机器学习模型在电力负荷预测上的表现差异，并进行残差与特征重要性分析。</p>
+</div>
+<div class="flex space-x-2">
+<select class="h-9 px-3 border border-outline-variant rounded bg-surface text-body-base focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer interactive-hover">
+<option value="mlp_rf">Default Model (MLP+RF)</option>
+<option value="mlp">MLP</option>
+<option value="rf">RandomForest</option>
+<option value="dt">DecisionTree</option>
+</select>
+<button class="h-9 px-4 bg-primary text-on-primary rounded font-medium flex items-center space-x-2 hover:bg-primary-container transition-colors active:opacity-80">
+<span class="material-symbols-outlined text-sm">download</span>
+<span>导出报告</span>
+</button>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+<!-- Model Metrics Comparison (Bar Chart) -->
+<div class="col-span-1 lg:col-span-2 bg-surface rounded-xl border border-outline-variant p-card-padding flex flex-col interactive-hover transition-shadow">
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-headline-md text-headline-md text-on-surface">模型指标对比</h3>
+<div class="flex items-center space-x-2">
+<span class="inline-block w-3 h-3 rounded-full bg-load-primary"></span>
+<span class="font-body-sm text-on-surface-variant">R²</span>
+<span class="inline-block w-3 h-3 rounded-full bg-success-metrics ml-2"></span>
+<span class="font-body-sm text-on-surface-variant">MAE</span>
+<span class="inline-block w-3 h-3 rounded-full bg-load-forecast ml-2"></span>
+<span class="font-body-sm text-on-surface-variant">RMSE</span>
+</div>
+</div>
+<div class="flex-1 w-full min-h-[300px] echarts-placeholder rounded flex items-center justify-center relative">
+<!-- ECharts Container Placeholder -->
+<div class="absolute inset-0 flex flex-col justify-end px-12 pb-8 pt-4">
+<!-- Simulated Bar Chart Grid -->
+<div class="border-b border-outline-variant absolute bottom-8 left-12 right-12"></div>
+<div class="border-b border-outline-variant absolute bottom-[25%] left-12 right-12 opacity-50 border-dashed"></div>
+<div class="border-b border-outline-variant absolute bottom-[50%] left-12 right-12 opacity-50 border-dashed"></div>
+<div class="border-b border-outline-variant absolute bottom-[75%] left-12 right-12 opacity-50 border-dashed"></div>
+<!-- Bars -->
+<div class="w-full flex justify-around items-end h-full z-10">
+<!-- MLP -->
+<div class="flex items-end space-x-1">
+<div class="w-8 bg-load-primary h-[82%] rounded-t opacity-90"></div>
+<div class="w-8 bg-success-metrics h-[45%] rounded-t opacity-90"></div>
+<div class="w-8 bg-load-forecast h-[68%] rounded-t opacity-90"></div>
+</div>
+<!-- RF -->
+<div class="flex items-end space-x-1">
+<div class="w-8 bg-load-primary h-[91%] rounded-t opacity-90"></div>
+<div class="w-8 bg-success-metrics h-[32%] rounded-t opacity-90"></div>
+<div class="w-8 bg-load-forecast h-[48%] rounded-t opacity-90"></div>
+</div>
+<!-- MLP+RF -->
+<div class="flex items-end space-x-1">
+<div class="w-8 bg-load-primary h-[93%] rounded-t opacity-90"></div>
+<div class="w-8 bg-success-metrics h-[28%] rounded-t opacity-90"></div>
+<div class="w-8 bg-load-forecast h-[42%] rounded-t opacity-90"></div>
+</div>
+<!-- DT -->
+<div class="flex items-end space-x-1">
+<div class="w-8 bg-load-primary h-[78%] rounded-t opacity-90"></div>
+<div class="w-8 bg-success-metrics h-[55%] rounded-t opacity-90"></div>
+<div class="w-8 bg-load-forecast h-[82%] rounded-t opacity-90"></div>
+</div>
+</div>
+<!-- X Axis Labels -->
+<div class="absolute -bottom-6 left-12 right-12 flex justify-around text-body-sm text-on-surface-variant">
+<span>MLP</span>
+<span>RandomForest</span>
+<span>MLP+RF</span>
+<span>DecisionTree</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Radar Chart -->
+<div class="col-span-1 bg-surface rounded-xl border border-outline-variant p-card-padding flex flex-col interactive-hover transition-shadow">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-4">综合性能评估</h3>
+<div class="flex-1 w-full min-h-[300px] echarts-placeholder rounded flex items-center justify-center relative">
+<!-- ECharts Container Placeholder -->
+<svg class="w-full h-full opacity-60" viewbox="0 0 100 100">
+<!-- Radar web -->
+<polygon fill="none" points="50,10 90,50 50,90 10,50" stroke="#c3c6d6" stroke-width="0.5"></polygon>
+<polygon fill="none" points="50,30 70,50 50,70 30,50" stroke="#c3c6d6" stroke-width="0.5"></polygon>
+<line stroke="#c3c6d6" stroke-width="0.5" x1="50" x2="50" y1="10" y2="90"></line>
+<line stroke="#c3c6d6" stroke-width="0.5" x1="10" x2="90" y1="50" y2="50"></line>
+<!-- Data polygon (MLP+RF approx) -->
+<polygon fill="rgba(0, 82, 204, 0.2)" points="50,15 85,50 50,85 15,50" stroke="#0052CC" stroke-width="1.5"></polygon>
+</svg>
+<div class="absolute top-4 left-1/2 -translate-x-1/2 text-body-sm text-on-surface-variant bg-surface px-1">R²</div>
+<div class="absolute bottom-4 left-1/2 -translate-x-1/2 text-body-sm text-on-surface-variant bg-surface px-1">RMSE</div>
+<div class="absolute left-4 top-1/2 -translate-y-1/2 text-body-sm text-on-surface-variant bg-surface px-1">MAE</div>
+<div class="absolute right-4 top-1/2 -translate-y-1/2 text-body-sm text-on-surface-variant bg-surface px-1">MAPE</div>
+</div>
+</div>
+<!-- Predicted vs Actual Scatter -->
+<div class="col-span-1 lg:col-span-1 bg-surface rounded-xl border border-outline-variant p-card-padding flex flex-col interactive-hover transition-shadow">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-4">预测 vs 真实值分布</h3>
+<div class="flex-1 w-full min-h-[300px] echarts-placeholder rounded flex items-center justify-center relative overflow-hidden">
+<!-- ECharts Container Placeholder -->
+<div class="absolute inset-0 p-6">
+<div class="w-full h-full border-l border-b border-outline-variant relative">
+<!-- y=x reference line -->
+<div class="absolute bottom-0 left-0 w-[141%] h-px bg-outline-variant origin-bottom-left -rotate-45"></div>
+<!-- Simulated scatter points -->
+<div class="absolute w-1.5 h-1.5 rounded-full bg-load-primary opacity-60 bottom-[20%] left-[22%]"></div>
+<div class="absolute w-1.5 h-1.5 rounded-full bg-load-primary opacity-60 bottom-[45%] left-[42%]"></div>
+<div class="absolute w-1.5 h-1.5 rounded-full bg-load-primary opacity-60 bottom-[60%] left-[58%]"></div>
+<div class="absolute w-1.5 h-1.5 rounded-full bg-load-primary opacity-60 bottom-[80%] left-[75%]"></div>
+<!-- Outliers (Red) -->
+<div class="absolute w-1.5 h-1.5 rounded-full bg-error-high opacity-80 bottom-[85%] left-[60%]"></div>
+<div class="absolute w-1.5 h-1.5 rounded-full bg-error-high opacity-80 bottom-[30%] left-[50%]"></div>
+<div class="absolute -bottom-6 left-1/2 -translate-x-1/2 text-body-sm text-on-surface-variant">真实负荷 (Actual)</div>
+<div class="absolute top-1/2 -left-6 -translate-y-1/2 -rotate-90 text-body-sm text-on-surface-variant origin-center whitespace-nowrap">预测负荷 (Predicted)</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Residual Analysis (Scatter + Boxplot vertical stack) -->
+<div class="col-span-1 lg:col-span-2 flex flex-col gap-gutter">
+<!-- Residual Scatter -->
+<div class="bg-surface rounded-xl border border-outline-variant p-card-padding flex-1 interactive-hover transition-shadow">
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-headline-md text-headline-md text-on-surface">残差散点图</h3>
+<div class="flex space-x-2">
+<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-primary-fixed text-on-primary-fixed">凌晨</span>
+<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-tertiary-fixed text-on-tertiary-fixed">上午</span>
+<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-secondary-fixed text-on-secondary-fixed">下午</span>
+<span class="px-2 py-0.5 rounded text-[10px] font-medium bg-surface-variant text-on-surface-variant">夜晚</span>
+</div>
+</div>
+<div class="w-full h-[200px] echarts-placeholder rounded flex items-center justify-center relative">
+<div class="absolute inset-0 p-6">
+<div class="w-full h-full border-l border-b border-outline-variant relative">
+<!-- Y=0 line -->
+<div class="absolute top-1/2 left-0 w-full h-px bg-error-high opacity-50 border-dashed"></div>
+<div class="absolute top-1/2 -left-8 -translate-y-1/2 text-body-sm text-on-surface-variant">0</div>
+<div class="absolute -bottom-6 left-1/2 -translate-x-1/2 text-body-sm text-on-surface-variant">预测值</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Hourly Error Boxplot -->
+<div class="bg-surface rounded-xl border border-outline-variant p-card-padding flex-1 interactive-hover transition-shadow">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-4">各时段绝对误差分布</h3>
+<div class="w-full h-[200px] echarts-placeholder rounded flex items-center justify-center relative">
+<div class="absolute inset-0 p-6">
+<div class="w-full h-full border-l border-b border-outline-variant relative flex items-end justify-around pb-2">
+<!-- Simulated Boxplots -->
+<div class="w-8 border-l border-r border-t border-b border-primary bg-primary-fixed bg-opacity-30 relative h-[40%] bottom-[10%] flex justify-center">
+<div class="w-full h-px bg-primary absolute top-1/2"></div>
+<div class="w-px h-full bg-primary absolute -top-[50%]"></div>
+<div class="w-px h-full bg-primary absolute -bottom-[50%]"></div>
+<div class="w-4 h-px bg-primary absolute -top-[50%]"></div>
+<div class="w-4 h-px bg-primary absolute -bottom-[50%]"></div>
+</div>
+<div class="w-8 border-l border-r border-t border-b border-primary bg-primary-fixed bg-opacity-30 relative h-[60%] bottom-[20%] flex justify-center">
+<div class="w-full h-px bg-primary absolute top-[40%]"></div>
+<div class="w-px h-full bg-primary absolute -top-[30%]"></div>
+<div class="w-px h-full bg-primary absolute -bottom-[20%]"></div>
+</div>
+<div class="absolute -bottom-6 left-0 w-full flex justify-around text-body-sm text-on-surface-variant">
+<span>凌晨 (0-6)</span>
+<span>上午 (6-12)</span>
+<span>下午 (12-18)</span>
+<span>夜晚 (18-24)</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Feature Importance (Horizontal Bar) -->
+<div class="col-span-1 lg:col-span-3 bg-surface rounded-xl border border-outline-variant p-card-padding interactive-hover transition-shadow">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-4">特征重要性 (Feature Importance)</h3>
+<div class="w-full min-h-[350px] echarts-placeholder rounded flex flex-col justify-around py-4 px-8 relative">
+<!-- Horizontal Bar Chart Simulated -->
+<div class="flex items-center w-full">
+<div class="w-32 text-right pr-4 font-data-mono text-data-mono text-on-surface-variant truncate">L_h_minus_1</div>
+<div class="flex-1 bg-surface-container h-6 rounded-r overflow-hidden relative">
+<div class="bg-load-primary h-full w-[85%] rounded-r flex items-center justify-end pr-2 text-xs text-on-primary font-data-mono">0.35</div>
+</div>
+</div>
+<div class="flex items-center w-full mt-3">
+<div class="w-32 text-right pr-4 font-data-mono text-data-mono text-on-surface-variant truncate">L_h_minus_24</div>
+<div class="flex-1 bg-surface-container h-6 rounded-r overflow-hidden relative">
+<div class="bg-load-primary h-full w-[55%] rounded-r flex items-center justify-end pr-2 text-xs text-on-primary font-data-mono">0.22</div>
+</div>
+</div>
+<div class="flex items-center w-full mt-3">
+<div class="w-32 text-right pr-4 font-data-mono text-data-mono text-on-surface-variant truncate">temperature</div>
+<div class="flex-1 bg-surface-container h-6 rounded-r overflow-hidden relative">
+<div class="bg-load-primary h-full w-[38%] rounded-r flex items-center justify-end pr-2 text-xs text-on-primary font-data-mono">0.15</div>
+</div>
+</div>
+<div class="flex items-center w-full mt-3">
+<div class="w-32 text-right pr-4 font-data-mono text-data-mono text-on-surface-variant truncate">T_h_minus_1</div>
+<div class="flex-1 bg-surface-container h-6 rounded-r overflow-hidden relative">
+<div class="bg-load-primary h-full w-[30%] rounded-r flex items-center justify-end pr-2 text-xs text-on-primary font-data-mono">0.12</div>
+</div>
+</div>
+<div class="flex items-center w-full mt-3">
+<div class="w-32 text-right pr-4 font-data-mono text-data-mono text-on-surface-variant truncate">radiation</div>
+<div class="flex-1 bg-surface-container h-6 rounded-r overflow-hidden relative">
+<div class="bg-load-primary opacity-80 h-full w-[20%] rounded-r flex items-center justify-end pr-2 text-xs text-on-primary font-data-mono">0.08</div>
+</div>
+</div>
+<div class="flex items-center w-full mt-3">
+<div class="w-32 text-right pr-4 font-data-mono text-data-mono text-on-surface-variant truncate">relative_humidity</div>
+<div class="flex-1 bg-surface-container h-6 rounded-r overflow-hidden relative">
+<div class="bg-load-primary opacity-60 h-full w-[12%] rounded-r flex items-center justify-end pr-2 text-xs text-on-surface font-data-mono">0.05</div>
+</div>
+</div>
+<div class="flex items-center w-full mt-3">
+<div class="w-32 text-right pr-4 font-data-mono text-data-mono text-on-surface-variant truncate">hour</div>
+<div class="flex-1 bg-surface-container h-6 rounded-r overflow-hidden relative">
+<div class="bg-load-primary opacity-40 h-full w-[8%] rounded-r flex items-center justify-end pr-2 text-xs text-on-surface font-data-mono">0.03</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>
