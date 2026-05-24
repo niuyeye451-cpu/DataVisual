@@ -105,9 +105,9 @@ export default function ModelAnalysis() {
         trigger: 'item',
         formatter: (p) => `Actual: <b>${p.value[0]}</b><br/>Predicted: <b>${p.value[1]}</b>`,
       },
-      grid: { left: '12%', right: '5%', top: '8%', bottom: '15%' },
-      xAxis: { type: 'value', name: '真实负荷 (Actual)', nameTextStyle: { fontSize: 11 }, splitLine: { lineStyle: { color: '#e1e2ec', type: 'dashed' } } },
-      yAxis: { type: 'value', name: '预测负荷 (Predicted)', nameTextStyle: { fontSize: 11 }, splitLine: { lineStyle: { color: '#e1e2ec', type: 'dashed' } } },
+      grid: { left: '14%', right: '8%', top: '8%', bottom: '18%' },
+      xAxis: { type: 'value', name: '真实负荷 (Actual)', nameLocation: 'center', nameGap: 35, nameTextStyle: { fontSize: 11 }, splitLine: { lineStyle: { color: '#e1e2ec', type: 'dashed' } } },
+      yAxis: { type: 'value', name: '预测负荷 (Predicted)', nameLocation: 'center', nameGap: 35, nameTextStyle: { fontSize: 11 }, splitLine: { lineStyle: { color: '#e1e2ec', type: 'dashed' } } },
       series: [
         {
           type: 'scatter', data: normal, symbolSize: 4,
@@ -143,7 +143,7 @@ export default function ModelAnalysis() {
     return {
       tooltip: { trigger: 'item' },
       legend: { data: periods, top: 0, textStyle: { fontSize: 10 } },
-      grid: { left: '10%', right: '5%', top: '15%', bottom: '15%' },
+      grid: { left: '10%', right: '8%', top: '20%', bottom: '18%' },
       xAxis: { type: 'value', name: '预测值', nameTextStyle: { fontSize: 11 }, splitLine: { lineStyle: { color: '#e1e2ec', type: 'dashed' } } },
       yAxis: { type: 'value', name: '残差', nameTextStyle: { fontSize: 11 }, splitLine: { lineStyle: { color: '#e1e2ec', type: 'dashed' } } },
       series: periods.map((p) => ({
@@ -175,7 +175,7 @@ export default function ModelAnalysis() {
     });
     return {
       tooltip: { trigger: 'item' },
-      grid: { left: '8%', right: '5%', top: '10%', bottom: '12%' },
+      grid: { left: '10%', right: '8%', top: '12%', bottom: '20%' },
       xAxis: { type: 'category', data: periods.map((p) => `${p} (${p === '凌晨' ? '0-6' : p === '上午' ? '6-12' : p === '下午' ? '12-18' : '18-24'})`), axisLabel: { fontSize: 10 } },
       yAxis: { type: 'value', name: '绝对误差', splitLine: { lineStyle: { color: '#e1e2ec', type: 'dashed' } } },
       series: [{
@@ -192,7 +192,7 @@ export default function ModelAnalysis() {
     const sorted = [...featureData.importance].sort((a, b) => a.importance - b.importance);
     return {
       tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      grid: { left: '20%', right: '10%', top: '5%', bottom: '5%', containLabel: true },
+      grid: { left: '25%', right: '10%', top: '5%', bottom: '5%', containLabel: true },
       xAxis: { type: 'value', name: 'Importance', axisLabel: { fontSize: 10 } },
       yAxis: {
         type: 'category', data: sorted.map((d) => d.feature),
@@ -269,8 +269,8 @@ export default function ModelAnalysis() {
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col lg={8} xs={24}>
           <ChartCard title="预测 vs 真实值分布" icon={<DotChartOutlined style={{ color: theme.colors.errorHigh }} />}>
-            {loading ? <Spin style={{ display:'block', margin:'120px auto' }} /> :
-              scatterOption ? <ReactEChartsCore echarts={echarts} option={scatterOption} style={{ height: 320 }} notMerge /> : null}
+            {loading ? <Spin style={{ display:'block', margin:'140px auto' }} /> :
+              scatterOption ? <ReactEChartsCore echarts={echarts} option={scatterOption} style={{ height: 420 }} notMerge /> : null}
           </ChartCard>
         </Col>
         <Col lg={16} xs={24}>
@@ -286,12 +286,12 @@ export default function ModelAnalysis() {
               }
               style={{ flex: 1 }}
             >
-              {loading ? <Spin style={{ display:'block', margin:'60px auto' }} /> :
-                residualOption ? <ReactEChartsCore echarts={echarts} option={residualOption} style={{ height: 180 }} notMerge /> : null}
+              {loading ? <Spin style={{ display:'block', margin:'80px auto' }} /> :
+                residualOption ? <ReactEChartsCore echarts={echarts} option={residualOption} style={{ height: 220 }} notMerge /> : null}
             </ChartCard>
             <ChartCard title="各时段绝对误差分布" style={{ flex: 1 }}>
-              {loading ? <Spin style={{ display:'block', margin:'60px auto' }} /> :
-                boxplotOption ? <ReactEChartsCore echarts={echarts} option={boxplotOption} style={{ height: 180 }} notMerge /> : null}
+              {loading ? <Spin style={{ display:'block', margin:'80px auto' }} /> :
+                boxplotOption ? <ReactEChartsCore echarts={echarts} option={boxplotOption} style={{ height: 220 }} notMerge /> : null}
             </ChartCard>
           </div>
         </Col>
@@ -299,8 +299,8 @@ export default function ModelAnalysis() {
 
       {/* Row 3: Feature Importance (full width) */}
       <ChartCard title="特征重要性 (Feature Importance)">
-        {loading ? <Spin style={{ display:'block', margin:'100px auto' }} /> :
-          featureOption ? <ReactEChartsCore echarts={echarts} option={featureOption} style={{ height: 320 }} notMerge /> : null}
+        {loading ? <Spin style={{ display:'block', margin:'120px auto' }} /> :
+          featureOption ? <ReactEChartsCore echarts={echarts} option={featureOption} style={{ height: 350 }} notMerge /> : null}
       </ChartCard>
     </>
   );
