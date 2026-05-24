@@ -153,7 +153,6 @@ export default function FeatureExploration() {
       },
       brush: {
         toolbox: ['rect', 'polygon', 'clear'],
-        brushLink: [0, 1],
         throttleType: 'debounce',
         throttleDelay: 300,
       },
@@ -239,28 +238,24 @@ export default function FeatureExploration() {
   }, [data, brushData, scatterX, scatterY, brushIndices]);
 
   // Handle parallel-coords brush → filter scatter data by matching dataIndex
-  const onParallelEvents = useCallback((events) => {
-    if (events?.brushSelected) {
-      const batch = events.brushSelected.batch;
-      if (batch && batch.length > 0) {
-        const selected = batch[0].selected;
-        if (selected && selected.length > 0) {
-          const indices = selected[0].dataIndex || [];
-          setBrushIndices(indices.length > 0 ? indices : null);
-          return;
-        }
+  const handleBrushSelected = useCallback((params) => {
+    const batch = params?.batch;
+    if (batch && batch.length > 0) {
+      const selected = batch[0].selected;
+      if (selected && selected.length > 0) {
+        const indices = selected[0].dataIndex || [];
+        setBrushIndices(indices.length > 0 ? indices : null);
+        return;
       }
     }
-    // When brush is cleared
-    if (events?.brushEnd) {
-      const inst = parallelRef.current?.getEchartsInstance();
-      if (inst) {
-        const opt = inst.getOption();
-        const hasSelection = opt.brush && opt.brush[0] && opt.brush[0].selected;
-        if (!hasSelection) setBrushIndices(null);
-      }
-    }
+    setBrushIndices(null);
   }, []);
+
+  const parallelEvents = useMemo(() => ({
+    brushSelected: handleBrushSelected,
+    brushEnd: handleBrushSelected,
+    globalout: () => setBrushIndices(null),
+  }), [handleBrushSelected]);
 
   // ---- 5. Distribution Chart ----
   const distOption = useMemo(() => {
@@ -422,7 +417,7 @@ export default function FeatureExploration() {
                   option={parallelOption}
                   style={{ height: 350 }}
                   notMerge
-                  onEvents={onParallelEvents}
+                  onEvents={parallelEvents}
                 />
               ) : null}
           </ChartCard>
