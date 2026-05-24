@@ -6,6 +6,7 @@ import * as echarts from 'echarts/core';
 import { BarChart, ScatterChart, RadarChart, BoxplotChart } from 'echarts/charts';
 import {
   GridComponent, TooltipComponent, LegendComponent, RadarComponent, DatasetComponent,
+  MarkLineComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import useFetch from '../hooks/useFetch';
@@ -17,7 +18,7 @@ import { useSettings } from '../context/SettingsContext';
 echarts.use([
   BarChart, ScatterChart, RadarChart, BoxplotChart,
   GridComponent, TooltipComponent, LegendComponent, RadarComponent,
-  DatasetComponent, CanvasRenderer,
+  DatasetComponent, MarkLineComponent, CanvasRenderer,
 ]);
 
 const { Text } = Typography;
