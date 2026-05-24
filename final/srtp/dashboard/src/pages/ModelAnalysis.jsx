@@ -79,7 +79,7 @@ export default function ModelAnalysis() {
     return {
       tooltip: {},
       legend: { bottom: 0, data: modelData.metrics.map((m) => m.model) },
-      radar: { indicator, center: ['50%', '50%'], radius: '65%' },
+      radar: { indicator, center: ['50%', '43%'], radius: '68%', nameGap: 15 },
       series: [{
         type: 'radar',
         data: modelData.metrics.map((m, i) => ({

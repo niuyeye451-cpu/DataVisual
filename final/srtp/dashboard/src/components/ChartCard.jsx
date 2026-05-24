@@ -104,20 +104,6 @@ export default function ChartCard({ title, icon, extra, children, style, bodySty
           body: { padding: 0, height: 'calc(96vh - 72px)', display: 'flex', flexDirection: 'column' },
           content: { borderRadius: 12, overflow: 'hidden' },
         }}
-        closeIcon={
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              color: '#434654',
-              cursor: 'pointer',
-            }}
-          >
-            <FullscreenExitOutlined style={{ fontSize: 16 }} />
-            <span style={{ fontSize: 13 }}>退出全屏</span>
-          </div>
-        }
         destroyOnClose
       >
         {/* Fullscreen header */}
@@ -138,6 +124,31 @@ export default function ChartCard({ title, icon, extra, children, style, bodySty
           </Text>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {extra && <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{extra}</div>}
+            <div
+              onClick={() => setFullscreen(false)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                color: '#434654',
+                cursor: 'pointer',
+                padding: '4px 12px',
+                borderRadius: 6,
+                fontSize: 13,
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = '#003d9b';
+                e.currentTarget.style.background = '#e7e7f2';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = '#434654';
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <FullscreenExitOutlined style={{ fontSize: 15 }} />
+              退出全屏
+            </div>
           </div>
         </div>
 
