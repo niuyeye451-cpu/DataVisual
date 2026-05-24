@@ -50,6 +50,15 @@ export default function FeatureExploration() {
   const [distView, setDistView] = useState('all');
   const [brushIndices, setBrushIndices] = useState(null);
 
+  // Shared data array for brush-linked charts (downsampled for visual clarity)
+  const brushData = useMemo(() => {
+    if (!data?.samples) return [];
+    const MAX = 600;
+    if (data.samples.length <= MAX) return data.samples;
+    const step = Math.floor(data.samples.length / MAX);
+    return data.samples.filter((_, i) => i % step === 0);
+  }, [data]);
+
   // Refs for chart instances
   const parallelRef = useRef(null);
   const scatterRef = useRef(null);
@@ -152,15 +161,11 @@ export default function FeatureExploration() {
     };
   }, [data]);
 
-  // ---- 3. Parallel Coordinates (novel view) ----
+  // ---- 3. Parallel Coordinates (novel view, shares brushData with scatter) ----
   const parallelOption = useMemo(() => {
-    if (!data?.feature_stats || !data?.samples || !data?.columns) return null;
+    if (!data?.feature_stats || !brushData.length || !data?.columns) return null;
     const cols = data.columns;
     const stats = data.feature_stats;
-    // Downsample to ~600 lines for visual clarity
-    const sample = data.samples.length > 600
-      ? data.samples.filter((_, i) => i % Math.ceil(data.samples.length / 600) === 0)
-      : data.samples;
     const loadIdx = cols.length - 1;
 
     return {
@@ -213,22 +218,22 @@ export default function FeatureExploration() {
         type: 'parallel',
         lineStyle: { width: 0.5, opacity: 0.4 },
         emphasis: { lineStyle: { width: 2, opacity: 1 } },
-        data: sample,
+        data: brushData,
       }],
     };
-  }, [data]);
+  }, [data, brushData]);
 
-  // ---- 4. Scatter Plot (with brush linking) ----
+  // ---- 4. Scatter Plot (shares brushData with parallel coords, linked via brush) ----
   const scatterOption = useMemo(() => {
-    if (!data?.feature_stats || !data?.samples || !data?.columns) return null;
+    if (!data?.feature_stats || !brushData.length || !data?.columns) return null;
     const xIdx = data.columns.indexOf(scatterX);
     const yIdx = data.columns.indexOf(scatterY);
     if (xIdx === -1 || yIdx === -1) return null;
 
-    let src = data.samples;
-    // Filter by brush selection from parallel coords
+    let src = brushData;
+    // Filter by brush selection
     if (brushIndices && brushIndices.length > 0) {
-      src = data.samples.filter((_, i) => brushIndices.includes(i));
+      src = brushData.filter((_, i) => brushIndices.includes(i));
     }
 
     const points = src.map((row) => [row[xIdx], row[yIdx]]);
@@ -265,7 +270,7 @@ export default function FeatureExploration() {
         emphasis: { itemStyle: { opacity: 1, borderColor: '#191b23', borderWidth: 1 } },
       }],
     };
-  }, [data, scatterX, scatterY, brushIndices]);
+  }, [data, brushData, scatterX, scatterY, brushIndices]);
 
   // Handle brush events
   const onParallelEvents = useCallback((events) => {
