@@ -1,0 +1,36 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: loadforecast-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./srtp:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: loadforecast-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./srtp/dashboard:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_TARGET=http://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped

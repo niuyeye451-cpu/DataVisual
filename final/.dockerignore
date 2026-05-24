@@ -1,0 +1,22 @@
+# Python
+__pycache__
+*.pyc
+venv
+.venv
+
+# Node
+node_modules
+
+# IDE
+.idea
+.vscode
+
+# Misc
+*.zip
+*.Identifier
+*.png
+.git
+.gitignore
+
+# Prototypes (not needed at runtime)
+prototypes/

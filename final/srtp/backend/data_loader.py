@@ -310,6 +310,10 @@ def get_all_data():
     sorted_errors = sorted(residuals, key=lambda r: r["abs_error"], reverse=True)
     top_errors = sorted_errors[:10]
 
+    # ---- Raw samples for scatter plots ----
+    sample_n = min(2000, len(df))
+    samples = df[cols_for_corr].sample(n=sample_n, random_state=42).round(2).values.tolist()
+
     _cache = {
         "overview": overview,
         "eda": {
@@ -317,6 +321,7 @@ def get_all_data():
             "correlation_matrix": correlation_matrix,
             "heatmap_data": heatmap_data,
             "feature_stats": feature_stats,
+            "samples": samples,
         },
         "models": {
             "metrics": metrics,

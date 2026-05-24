@@ -5,10 +5,11 @@ import {
   FundOutlined,
   BarChartOutlined,
   SearchOutlined,
-  BellOutlined,
-  SettingOutlined,
-  QuestionCircleOutlined,
 } from '@ant-design/icons';
+import NotificationPopover from './NotificationPopover';
+import SettingsDrawer from './SettingsDrawer';
+import HelpDrawer from './HelpDrawer';
+import { useSettings } from '../context/SettingsContext';
 
 const { Sider, Header, Content } = Layout;
 const { Text } = Typography;
@@ -20,6 +21,7 @@ const iconMap = {
 };
 
 export default function AppLayout({ tabs, activeTab, onTabChange, pageTitle, children }) {
+  const { refresh } = useSettings();
   const menuItems = tabs.map((t) => ({
     key: t.key,
     icon: iconMap[t.icon] || <DashboardOutlined />,
@@ -132,7 +134,7 @@ export default function AppLayout({ tabs, activeTab, onTabChange, pageTitle, chi
             电力负荷预测可视化分析
           </h2>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Input
               prefix={<SearchOutlined style={{ color: '#737685' }} />}
               placeholder="Search data..."
@@ -143,9 +145,9 @@ export default function AppLayout({ tabs, activeTab, onTabChange, pageTitle, chi
                 border: '1px solid #c3c6d6',
               }}
             />
-            <BellOutlined style={{ fontSize: 20, color: '#434654', cursor: 'pointer' }} />
-            <SettingOutlined style={{ fontSize: 20, color: '#434654', cursor: 'pointer' }} />
-            <QuestionCircleOutlined style={{ fontSize: 20, color: '#434654', cursor: 'pointer' }} />
+            <NotificationPopover onRefresh={refresh} />
+            <SettingsDrawer />
+            <HelpDrawer />
           </div>
         </Header>
 

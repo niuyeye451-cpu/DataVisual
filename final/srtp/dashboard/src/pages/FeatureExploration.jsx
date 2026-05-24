@@ -108,10 +108,11 @@ export default function FeatureExploration() {
 
   // ---- 3. Scatter Plot ----
   const scatterOption = useMemo(() => {
-    if (!data?.feature_stats) return null;
-    // Build scatter data: we scatter the raw points from loaded data if available
-    // For now use feature_stats to build a placeholder structure
-    // In real integration, the API would return raw sample points
+    if (!data?.feature_stats || !data?.samples || !data?.columns) return null;
+    const xIdx = data.columns.indexOf(scatterX);
+    const yIdx = data.columns.indexOf(scatterY);
+    if (xIdx === -1 || yIdx === -1) return null;
+    const points = data.samples.map((row) => [row[xIdx], row[yIdx]]);
     return {
       tooltip: {
         trigger: 'item',
@@ -133,7 +134,7 @@ export default function FeatureExploration() {
       },
       series: [{
         type: 'scatter',
-        data: data.scatter_data || [],
+        data: points,
         symbolSize: 5,
         itemStyle: { color: theme.colors.loadPrimary, opacity: 0.5 },
         emphasis: { itemStyle: { opacity: 1, borderColor: '#191b23', borderWidth: 1 } },

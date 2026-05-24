@@ -12,6 +12,7 @@ import useFetch from '../hooks/useFetch';
 import { fetchModels, fetchErrors, fetchFeatures } from '../api';
 import ChartCard from '../components/ChartCard';
 import theme from '../theme';
+import { useSettings } from '../context/SettingsContext';
 
 echarts.use([
   BarChart, ScatterChart, RadarChart, BoxplotChart,
@@ -29,7 +30,17 @@ const MODEL_COLORS = {
 };
 
 export default function ModelAnalysis() {
-  const [selectedModel, setSelectedModel] = useState('mlp_rf');
+  const { defaultModel, setDefaultModel } = useSettings();
+  const [selectedModel, setSelectedModel] = useState(defaultModel);
+
+  // Sync when global setting changes
+  React.useEffect(() => { setSelectedModel(defaultModel); }, [defaultModel]);
+
+  const handleModelChange = (val) => {
+    setSelectedModel(val);
+    setDefaultModel(val);
+  };
+
   const { data: modelData, loading: ml, error: me } = useFetch(fetchModels);
   const { data: errorData, loading: el } = useFetch(() => fetchErrors(selectedModel), [selectedModel]);
   const { data: featureData, loading: fl } = useFetch(fetchFeatures);
@@ -216,7 +227,7 @@ export default function ModelAnalysis() {
           <Text type="secondary">评估不同机器学习模型在电力负荷预测上的表现差异，并进行残差与特征重要性分析。</Text>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Select value={selectedModel} onChange={setSelectedModel} style={{ width: 200 }}
+          <Select value={selectedModel} onChange={handleModelChange} style={{ width: 200 }}
             options={[
               { value: 'mlp_rf', label: 'Default Model (MLP+RF)' },
               { value: 'mlp', label: 'MLP' },
