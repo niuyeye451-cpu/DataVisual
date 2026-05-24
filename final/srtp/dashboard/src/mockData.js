@@ -41,6 +41,7 @@ const mockData = {
       { name: "hourly_load", mean: 452.3, std: 298.7, min: 0, max: 1680.5, q1: 230, median: 410, q3: 630, n: 11664 },
     ],
     scatter_data: generateScatterData(),
+    samples: generateSamples(),
   },
 
   models: {
@@ -171,6 +172,31 @@ function generateResiduals() {
       percentage_error: Math.round((absErr / actual) * 10000) / 100,
       hour_period: period,
     });
+  }
+  return data;
+}
+
+function generateSamples() {
+  const data = [];
+  for (let i = 0; i < 600; i++) {
+    const hour = Math.floor(Math.random() * 24);
+    const temperature = 20 + Math.random() * 20;
+    const radiation = Math.max(0, Math.min(980, 100 + 500 * Math.sin((hour - 6) / 24 * Math.PI) + (Math.random() - 0.5) * 300));
+    const humidity = 40 + Math.random() * 50;
+    const load = 200 + temperature * 8 + radiation * 0.3 + (Math.random() - 0.5) * 200;
+    const h24 = load + (Math.random() - 0.5) * 40;
+    const h1 = load + (Math.random() - 0.5) * 20;
+    const t1 = temperature + (Math.random() - 0.5) * 2;
+    data.push([
+      Math.round(radiation * 100) / 100,
+      Math.round(temperature * 100) / 100,
+      Math.round(humidity * 100) / 100,
+      Math.round(h24 * 100) / 100,
+      Math.round(h1 * 100) / 100,
+      Math.round(t1 * 100) / 100,
+      Math.round(Math.max(0, load) * 100) / 100,
+      hour,
+    ]);
   }
   return data;
 }

@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState } from 'react';
 import { Row, Col, Table, Tag, Button, Space, DatePicker, Spin, Alert } from 'antd';
 import {
   DatabaseOutlined,
@@ -8,6 +8,7 @@ import {
   DownloadOutlined,
   ReloadOutlined,
   TableOutlined,
+  ClearOutlined,
 } from '@ant-design/icons';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import * as echarts from 'echarts/core';
@@ -19,6 +20,7 @@ import {
   LegendComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
+import dayjs from 'dayjs';
 import useFetch from '../hooks/useFetch';
 import { fetchOverview } from '../api';
 import ChartCard from '../components/ChartCard';
@@ -43,11 +45,35 @@ const periodColor = {
 
 export default function DataOverview() {
   const { data, loading, error, refetch } = useFetch(fetchOverview);
+  const [dateRange, setDateRange] = useState(null);
+
+  // Filter time series by date range
+  const filteredSeries = useMemo(() => {
+    if (!data?.time_series) return [];
+    if (!dateRange || !dateRange[0] || !dateRange[1]) return data.time_series;
+    const [start, end] = dateRange;
+    return data.time_series.filter((d) => {
+      const t = dayjs(d.time);
+      return t.isAfter(start.subtract(1, 'minute')) && t.isBefore(end.add(1, 'minute'));
+    });
+  }, [data, dateRange]);
+
+  // Recalculated KPIs for filtered view
+  const filteredStats = useMemo(() => {
+    if (!filteredSeries.length) return null;
+    const loads = filteredSeries.map((d) => d.load);
+    return {
+      total: filteredSeries.length,
+      avg: loads.reduce((a, b) => a + b, 0) / loads.length,
+      peak: Math.max(...loads),
+      std: Math.sqrt(loads.reduce((s, v) => s + (v - loads.reduce((a, b) => a + b, 0) / loads.length) ** 2, 0) / loads.length),
+    };
+  }, [filteredSeries]);
 
   const exportCSV = useCallback(() => {
-    if (!data?.time_series?.length) return;
+    if (!filteredSeries.length) return;
     const header = 'Time,Load (kWh)';
-    const rows = data.time_series.map((d) => `"${d.time}",${d.load}`);
+    const rows = filteredSeries.map((d) => `"${d.time}",${d.load}`);
     const csv = [header, ...rows].join('\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -56,12 +82,12 @@ export default function DataOverview() {
     a.download = 'load_data.csv';
     a.click();
     URL.revokeObjectURL(url);
-  }, [data]);
+  }, [filteredSeries]);
 
   const timeSeriesOption = useMemo(() => {
-    if (!data?.time_series) return null;
-    const times = data.time_series.map((d) => d.time);
-    const loads = data.time_series.map((d) => d.load);
+    if (!filteredSeries.length) return null;
+    const times = filteredSeries.map((d) => d.time);
+    const loads = filteredSeries.map((d) => d.load);
     return {
       tooltip: {
         trigger: 'axis',
@@ -105,7 +131,7 @@ export default function DataOverview() {
         },
       ],
     };
-  }, [data]);
+  }, [filteredSeries]);
 
   const tableColumns = [
     { title: 'Time', dataIndex: 'time', key: 'time', sorter: (a, b) => a.time.localeCompare(b.time) },
@@ -127,42 +153,51 @@ export default function DataOverview() {
 
   return (
     <>
+      {/* Analysis Context */}
+      <Alert
+        type="info"
+        showIcon
+        message="分析任务：数据概览"
+        description="探索电力负荷的时间变化趋势，识别峰值时段与周期性模式。使用下方时间选择器和滑块缩放工具，聚焦特定时间段的负荷行为。"
+        style={{ marginBottom: 24, borderRadius: 8, border: `1px solid ${theme.colors.primaryFixedDim}` }}
+      />
+
       {/* KPI Cards */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={12} lg={6}>
           <KpiCard
-            title="总样本数 (Total Samples)"
-            value={data?.total_samples}
+            title={dateRange ? "筛选样本数 (Filtered)" : "总样本数 (Total Samples)"}
+            value={dateRange ? filteredStats?.total : data?.total_samples}
             unit="records"
-            subtitle="100% Data Integrity"
-            subtitleColor={theme.colors.successMetrics}
+            subtitle={dateRange ? `全量 ${data?.total_samples} 条` : "100% Data Integrity"}
+            subtitleColor={dateRange ? theme.colors.primary : theme.colors.successMetrics}
             icon={<DatabaseOutlined />}
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <KpiCard
             title="平均负荷 (Avg Load)"
-            value={data?.avg_load}
+            value={dateRange ? filteredStats?.avg?.toFixed(1) : data?.avg_load}
             unit="kWh"
-            subtitle="-2.4% vs last week"
-            subtitleColor={theme.colors.errorHigh}
+            subtitle={dateRange ? "筛选时段均值" : "-2.4% vs last week"}
+            subtitleColor={dateRange ? theme.colors.primary : theme.colors.errorHigh}
             icon={<ThunderboltOutlined />}
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <KpiCard
             title="峰值负荷 (Peak Load)"
-            value={data?.peak_load}
+            value={dateRange ? filteredStats?.peak?.toFixed(1) : data?.peak_load}
             unit="kWh"
-            subtitle="Recorded at 14:00, Jul 15"
+            subtitle={dateRange ? "筛选时段峰值" : "Recorded at 14:00, Jul 15"}
             icon={<WarningOutlined />}
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <KpiCard
             title="负荷标准差 (Std Dev)"
-            value={data?.std_load}
-            subtitle="High variance observed"
+            value={dateRange ? filteredStats?.std?.toFixed(1) : data?.std_load}
+            subtitle={dateRange ? "筛选时段波动" : "High variance observed"}
             icon={<LineChartOutlined />}
           />
         </Col>
@@ -175,7 +210,18 @@ export default function DataOverview() {
           icon={<LineChartOutlined style={{ color: theme.colors.primary }} />}
           extra={
             <Space>
-              <DatePicker.RangePicker size="small" style={{ borderRadius: 6 }} />
+              <DatePicker.RangePicker
+                size="small"
+                style={{ borderRadius: 6 }}
+                value={dateRange}
+                onChange={(dates) => setDateRange(dates)}
+                allowClear
+              />
+              {dateRange && (
+                <Button size="small" icon={<ClearOutlined />} onClick={() => setDateRange(null)}>
+                  清除筛选
+                </Button>
+              )}
               <Button type="primary" icon={<ReloadOutlined />} onClick={refetch} size="small">
                 Refresh Data
               </Button>
@@ -202,7 +248,7 @@ export default function DataOverview() {
       >
         <Table
           columns={tableColumns}
-          dataSource={(data?.time_series || []).slice(0, 100)}
+          dataSource={filteredSeries.slice(0, 100)}
           rowKey="time"
           size="small"
           loading={loading}

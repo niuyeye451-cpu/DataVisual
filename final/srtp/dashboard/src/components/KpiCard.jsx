@@ -16,7 +16,7 @@ export default function KpiCard({ title, value, unit, subtitle, subtitleColor, i
         border: '1px solid #DFE1E6',
         height: '100%',
       }}
-      bodyStyle={{ padding: 20, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}
+      styles={{ body: { padding: 20, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' } }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
         <Text type="secondary" style={{ fontWeight: 500 }}>

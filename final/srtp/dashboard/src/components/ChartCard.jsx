@@ -53,13 +53,14 @@ export default function ChartCard({ title, icon, extra, children, style, bodySty
           height: '100%',
           ...style,
         }}
-        bodyStyle={{ padding: 0, height: '100%', display: 'flex', flexDirection: 'column', ...bodyStyle }}
+        styles={{ body: { padding: 0, height: '100%', display: 'flex', flexDirection: 'column', ...bodyStyle } }}
       >
-        {/* Title bar */}
+        {/* Title bar with left accent border */}
         <div
           style={{
-            padding: '16px 20px',
+            padding: '16px 20px 16px 17px',
             borderBottom: '1px solid #c3c6d6',
+            borderLeft: '3px solid #0052cc',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -104,13 +105,14 @@ export default function ChartCard({ title, icon, extra, children, style, bodySty
           body: { padding: 0, height: 'calc(96vh - 72px)', display: 'flex', flexDirection: 'column' },
           content: { borderRadius: 12, overflow: 'hidden' },
         }}
-        destroyOnClose
+        destroyOnHidden
       >
         {/* Fullscreen header */}
         <div
           style={{
-            padding: '14px 24px',
+            padding: '14px 24px 14px 21px',
             borderBottom: '1px solid #c3c6d6',
+            borderLeft: '3px solid #0052cc',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',

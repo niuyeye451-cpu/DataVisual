@@ -1,6 +1,6 @@
-import React, { useMemo, useState, useCallback, useRef } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { Row, Col, Select, Button, Segmented, Spin, Alert, Typography } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { ReloadOutlined, UndoOutlined, RedoOutlined } from '@ant-design/icons';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import * as echarts from 'echarts/core';
 import { HeatmapChart, BarChart, ScatterChart, BoxplotChart, ParallelChart } from 'echarts/charts';
@@ -13,6 +13,7 @@ import {
   TransformComponent,
   ParallelComponent,
   BrushComponent,
+  ToolboxComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import useFetch from '../hooks/useFetch';
@@ -24,7 +25,7 @@ echarts.use([
   HeatmapChart, BarChart, ScatterChart, BoxplotChart, ParallelChart,
   GridComponent, TooltipComponent, VisualMapComponent, LegendComponent,
   DatasetComponent, TransformComponent, ParallelComponent, BrushComponent,
-  CanvasRenderer,
+  ToolboxComponent, CanvasRenderer,
 ]);
 
 const { Text } = Typography;
@@ -48,6 +49,9 @@ export default function FeatureExploration() {
   const [distFeature, setDistFeature] = useState('radiation');
   const [distView, setDistView] = useState('all');
   const [brushIndices, setBrushIndices] = useState(null);
+  const [hoveredIndex, setHoveredIndex] = useState(null);
+  const [brushHistory, setBrushHistory] = useState([]);
+  const [brushHistoryIdx, setBrushHistoryIdx] = useState(-1);
 
   // Shared data array for brush-linked charts (downsampled for visual clarity)
   const brushData = useMemo(() => {
@@ -58,8 +62,98 @@ export default function FeatureExploration() {
     return data.samples.filter((_, i) => i % step === 0);
   }, [data]);
 
-  // Refs for chart instances
-  const parallelRef = useRef(null);
+  // Refs for chart instances and latest handler
+  const parallelChartRef = useRef(null);
+  const scatterChartRef = useRef(null);
+  const handleBrushRef = useRef(null);
+
+  // ---- Brush with undo/redo history ----
+  const pushBrush = useCallback((indices) => {
+    setBrushHistory((prev) => {
+      const trimmed = prev.slice(0, brushHistoryIdx + 1);
+      return [...trimmed, indices].slice(-30);
+    });
+    setBrushHistoryIdx((prev) => Math.min(prev + 1, 29));
+    setBrushIndices(indices);
+  }, [brushHistoryIdx]);
+
+  const undo = useCallback(() => {
+    if (brushHistoryIdx <= 0) {
+      setBrushHistoryIdx(-1);
+      setBrushIndices(null);
+      return;
+    }
+    const newIdx = brushHistoryIdx - 1;
+    setBrushHistoryIdx(newIdx);
+    setBrushIndices(newIdx >= 0 ? brushHistory[newIdx] : null);
+  }, [brushHistoryIdx, brushHistory]);
+
+  const redo = useCallback(() => {
+    if (brushHistoryIdx >= brushHistory.length - 1) return;
+    const newIdx = brushHistoryIdx + 1;
+    setBrushHistoryIdx(newIdx);
+    setBrushIndices(brushHistory[newIdx]);
+  }, [brushHistoryIdx, brushHistory]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); }
+      if (e.ctrlKey && e.key === 'y') { e.preventDefault(); redo(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [undo, redo]);
+
+  // Handle parallel-coords brush → filter scatter data by matching dataIndex
+  const handleBrushSelected = useCallback((params) => {
+    if (!params?.batch?.length) { pushBrush(null); return; }
+    const selected = params.batch[0]?.selected;
+    if (!selected?.length) { pushBrush(null); return; }
+    const indices = selected[0]?.dataIndex;
+    pushBrush(indices?.length ? indices : null);
+  }, [pushBrush]);
+
+  // Keep latest handler in ref to avoid re-registering chart events
+  useEffect(() => { handleBrushRef.current = handleBrushSelected; }, [handleBrushSelected]);
+
+  // Heatmap click → set scatter axes
+  const handleHeatmapClick = useCallback((params) => {
+    if (!data?.columns) return;
+    const colX = data.columns[params.value[0]];
+    const colY = data.columns[params.value[1]];
+    if (colX && colX !== 'hour' && colY && colY !== 'hour') {
+      setScatterX(colX);
+      setScatterY(colY);
+    }
+  }, [data]);
+
+  // Bind brush event + hover linkage — stable callback, gets latest handler via ref
+  const onParallelReady = useCallback((chart) => {
+    parallelChartRef.current = chart;
+    chart.on('brushSelected', (params) => {
+      if (!chart.isDisposed()) handleBrushRef.current?.(params);
+    });
+    chart.on('mouseover', { seriesIndex: 0 }, (params) => {
+      if (!chart.isDisposed() && params.dataIndex != null) setHoveredIndex(params.dataIndex);
+    });
+    chart.on('mouseout', { seriesIndex: 0 }, () => {
+      if (!chart.isDisposed()) setHoveredIndex(null);
+    });
+  }, []);
+
+  const onScatterReady = useCallback((chart) => {
+    scatterChartRef.current = chart;
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (parallelChartRef.current && !parallelChartRef.current.isDisposed()) {
+        parallelChartRef.current.off('brushSelected', handleBrushSelected);
+      }
+    };
+  }, [handleBrushSelected]);
 
   // ---- 1. Correlation Heatmap ----
   const heatmapOption = useMemo(() => {
@@ -89,7 +183,7 @@ export default function FeatureExploration() {
       },
       visualMap: {
         min: -1, max: 1, calculable: true, orient: 'horizontal', left: 'center', bottom: '0%',
-        inRange: { color: [theme.colors.primary, '#faf8ff', theme.colors.error] },
+        inRange: { color: [theme.colors.primary, theme.colors.surfaceBright, theme.colors.error] },
       },
       series: [{
         type: 'heatmap', data: heatData,
@@ -124,7 +218,7 @@ export default function FeatureExploration() {
       visualMap: {
         min: 200, max: 800, calculable: true,
         orient: 'horizontal', left: 'center', bottom: '0%',
-        inRange: { color: ['#0052cc', '#f0f0fb', '#FF8B00'] },
+        inRange: { color: [theme.colors.loadPrimary, theme.colors.surfaceContainerLow, theme.colors.loadForecast] },
       },
       series: [{
         type: 'heatmap', data: heatData,
@@ -182,7 +276,7 @@ export default function FeatureExploration() {
         orient: 'horizontal',
         left: 'center',
         bottom: 0,
-        inRange: { color: ['#0052cc', '#48d7f9', '#36B37E', '#FF8B00', '#DE350B'] },
+        inRange: { color: [theme.colors.loadPrimary, theme.colors.secondaryContainer, theme.colors.successMetrics, theme.colors.loadForecast, theme.colors.errorHigh] },
         text: ['高负荷', '低负荷'],
         textStyle: { fontSize: 10, color: '#434654' },
       },
@@ -227,35 +321,29 @@ export default function FeatureExploration() {
         nameTextStyle: { fontSize: 11, color: '#434654' },
         splitLine: { lineStyle: { color: '#e1e2ec', type: 'dashed' } },
       },
-      series: [{
-        type: 'scatter',
-        data: points,
-        symbolSize: 4,
-        itemStyle: { color: theme.colors.loadPrimary, opacity: 0.5 },
-        emphasis: { itemStyle: { opacity: 1, borderColor: '#191b23', borderWidth: 1 } },
-      }],
+      animationDurationUpdate: 600,
+      animationEasingUpdate: 'cubicInOut',
+      series: [
+        {
+          type: 'scatter',
+          data: points,
+          symbolSize: 4,
+          itemStyle: { color: theme.colors.loadPrimary, opacity: 0.5 },
+          emphasis: { itemStyle: { opacity: 1, borderColor: '#191b23', borderWidth: 1 } },
+        },
+        // Highlight hovered point (from parallel coords hover)
+        ...(hoveredIndex != null && (!brushIndices || brushIndices.includes(hoveredIndex)) ? [{
+          type: 'scatter',
+          data: [[brushData[hoveredIndex]?.[xIdx], brushData[hoveredIndex]?.[yIdx]]],
+          symbolSize: 10,
+          itemStyle: { color: theme.colors.errorHigh, opacity: 1 },
+          z: 10,
+          silent: true,
+          name: 'Hovered',
+        }] : []),
+      ],
     };
-  }, [data, brushData, scatterX, scatterY, brushIndices]);
-
-  // Handle parallel-coords brush → filter scatter data by matching dataIndex
-  const handleBrushSelected = useCallback((params) => {
-    const batch = params?.batch;
-    if (batch && batch.length > 0) {
-      const selected = batch[0].selected;
-      if (selected && selected.length > 0) {
-        const indices = selected[0].dataIndex || [];
-        setBrushIndices(indices.length > 0 ? indices : null);
-        return;
-      }
-    }
-    setBrushIndices(null);
-  }, []);
-
-  const parallelEvents = useMemo(() => ({
-    brushSelected: handleBrushSelected,
-    brushEnd: handleBrushSelected,
-    globalout: () => setBrushIndices(null),
-  }), [handleBrushSelected]);
+  }, [data, brushData, scatterX, scatterY, brushIndices, hoveredIndex]);
 
   // ---- 5. Distribution Chart ----
   const distOption = useMemo(() => {
@@ -296,7 +384,7 @@ export default function FeatureExploration() {
           type: 'bar', data: histData.map((d) => d[1]),
           itemStyle: {
             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: '#0052cc' }, { offset: 1, color: '#48d7f9' },
+              { offset: 0, color: theme.colors.loadPrimary }, { offset: 1, color: theme.colors.secondaryContainer },
             ]),
             borderRadius: [4, 4, 0, 0],
           },
@@ -317,12 +405,12 @@ export default function FeatureExploration() {
         series: [
           {
             type: 'boxplot', data: boxData,
-            itemStyle: { color: '#faf8ff', borderColor: '#003d9b', borderWidth: 1.5 },
+            itemStyle: { color: theme.colors.surfaceBright, borderColor: theme.colors.primary, borderWidth: 1.5 },
             boxWidth: [20, 60],
           },
           {
             type: 'scatter', data: outliers,
-            itemStyle: { color: '#ba1a1a', opacity: 0.7 },
+            itemStyle: { color: theme.colors.error, opacity: 0.7 },
           },
         ],
       };
@@ -347,7 +435,7 @@ export default function FeatureExploration() {
           type: 'bar', xAxisIndex: 0, yAxisIndex: 0, data: histData.map((d) => d[1]),
           itemStyle: {
             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: '#0052cc' }, { offset: 1, color: '#48d7f9' },
+              { offset: 0, color: theme.colors.loadPrimary }, { offset: 1, color: theme.colors.secondaryContainer },
             ]),
             borderRadius: [4, 4, 0, 0],
           },
@@ -371,12 +459,32 @@ export default function FeatureExploration() {
 
   return (
     <>
+      {/* Analysis Context */}
+      <Alert
+        type="info"
+        showIcon
+        message="分析任务：特征探索"
+        description="分析不同特征与电力负荷的关联强度。点击相关性热力图单元格可自动设置散点图坐标轴；在平行坐标图上使用刷选工具框选数据子集，下方散点图将同步过滤。支持 Ctrl+Z / Ctrl+Y 撤销重做刷选。"
+        style={{ marginBottom: 24, borderRadius: 8, border: `1px solid ${theme.colors.primaryFixedDim}` }}
+      />
+
       {/* Row 1: Correlation Heatmap + Daily Cycle Heatmap */}
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xl={12} xs={24}>
-          <ChartCard title="相关性热力图">
+          <ChartCard
+            title="相关性热力图"
+            extra={<Text type="secondary" style={{ fontSize: 10, background: '#f3f3fd', padding: '2px 8px', borderRadius: 4 }}>点击单元格设置散点图轴</Text>}
+          >
             {loading ? <Spin style={{ display:'block', margin:'120px auto' }} /> :
-              heatmapOption ? <ReactEChartsCore echarts={echarts} option={heatmapOption} style={{ height: 340 }} notMerge /> : null}
+              heatmapOption ? (
+                <ReactEChartsCore
+                  echarts={echarts}
+                  option={heatmapOption}
+                  style={{ height: 340 }}
+                  notMerge
+                  onEvents={{ click: handleHeatmapClick }}
+                />
+              ) : null}
           </ChartCard>
         </Col>
         <Col xl={12} xs={24}>
@@ -403,7 +511,12 @@ export default function FeatureExploration() {
             extra={
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Text type="secondary" style={{ fontSize: 11 }}>颜色映射: 逐时负荷 (蓝=低, 红=高)</Text>
-                <Text type="secondary" style={{ fontSize: 10, background: '#f3f3fd', padding: '2px 8px', borderRadius: 4 }}>
+                <Text type="secondary" style={{
+                  fontSize: 11, background: theme.colors.surfaceContainerHigh,
+                  padding: '3px 10px', borderRadius: 6,
+                  border: `1px solid ${theme.colors.outlineVariant}`,
+                  fontFamily: 'Inter, sans-serif',
+                }}>
                   Brush 刷选联动散点图
                 </Text>
               </div>
@@ -412,12 +525,11 @@ export default function FeatureExploration() {
             {loading ? <Spin style={{ display:'block', margin:'100px auto' }} /> :
               parallelOption ? (
                 <ReactEChartsCore
-                  ref={parallelRef}
                   echarts={echarts}
                   option={parallelOption}
                   style={{ height: 350 }}
                   notMerge
-                  onEvents={parallelEvents}
+                  onChartReady={onParallelReady}
                 />
               ) : null}
           </ChartCard>
@@ -441,12 +553,26 @@ export default function FeatureExploration() {
                   <Select value={scatterY} onChange={setScatterY} size="small" style={{ width: 140, fontFamily: 'JetBrains Mono' }}
                     options={featureNames.filter(n => n !== 'hour').map((n) => ({ value: n, label: AXIS_NAMES[n] || n }))} />
                 </div>
-                <Button size="small" icon={<ReloadOutlined />} onClick={() => { setScatterX('temperature'); setScatterY('hourly_load'); setBrushIndices(null); }}>
+                <Button size="small" icon={<ReloadOutlined />} onClick={() => { setScatterX('temperature'); setScatterY('hourly_load'); pushBrush(null); }}
+                  style={{ borderRadius: 6 }}>
                   重置筛选
                 </Button>
                 {brushIndices && (
-                  <TagStat label="已选" value={brushIndices.length} color={theme.colors.errorHigh} />
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    padding: '2px 10px', borderRadius: 10,
+                    background: `${theme.colors.errorHigh}18`,
+                    border: `1px solid ${theme.colors.errorHigh}40`,
+                    fontFamily: 'JetBrains Mono, monospace', fontSize: 12,
+                    fontWeight: 600, color: theme.colors.errorHigh,
+                  }}>
+                    已选 {brushIndices.length}
+                  </span>
                 )}
+                <Button size="small" icon={<UndoOutlined />} onClick={undo} disabled={brushHistoryIdx < 0}
+                  style={{ borderRadius: 6 }} title="撤销 (Ctrl+Z)" />
+                <Button size="small" icon={<RedoOutlined />} onClick={redo} disabled={brushHistoryIdx >= brushHistory.length - 1}
+                  style={{ borderRadius: 6 }} title="重做 (Ctrl+Y)" />
               </div>
             }
           >
@@ -457,6 +583,7 @@ export default function FeatureExploration() {
                   option={scatterOption}
                   style={{ height: 400 }}
                   notMerge
+                  onChartReady={onScatterReady}
                 />
               ) : null}
           </ChartCard>
@@ -509,12 +636,14 @@ export default function FeatureExploration() {
 function TagStat({ label, value, color }) {
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px',
-      borderRadius: 4, fontSize: 11, background: color ? `${color}15` : '#f3f3fd',
-      border: `1px solid ${color ? color + '40' : '#c3c6d6'}`,
+      display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px',
+      borderRadius: 6, fontSize: 12,
+      background: color ? `${color}12` : '#f3f3fd',
+      border: `1px solid ${color ? color + '30' : '#c3c6d6'}`,
+      fontFamily: 'Inter, sans-serif',
     }}>
-      <Text type="secondary" style={{ fontSize: 11 }}>{label}:</Text>
-      <Text strong style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: color || '#191b23' }}>{value}</Text>
+      <Text type="secondary" style={{ fontSize: 12 }}>{label}</Text>
+      <Text strong style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: color || '#191b23' }}>{value}</Text>
     </div>
   );
 }

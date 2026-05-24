@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { Row, Col, Select, Button, Spin, Alert, Typography, Card } from 'antd';
+import { Row, Col, Select, Button, Spin, Alert, Typography, Card, Popover, Descriptions } from 'antd';
 import { DownloadOutlined, BarChartOutlined, RadarChartOutlined, DotChartOutlined } from '@ant-design/icons';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import * as echarts from 'echarts/core';
@@ -102,16 +102,17 @@ export default function ModelAnalysis() {
   const barOption = useMemo(() => {
     if (!modelData?.metrics) return null;
     const models = modelData.metrics.map((m) => m.model);
+    const metricLabels = { r2: 'R²', mae: 'MAE', rmse: 'RMSE' };
     const metrics = ['r2', 'mae', 'rmse'];
     const metricColors = [theme.colors.loadPrimary, theme.colors.successMetrics, theme.colors.loadForecast];
     return {
       tooltip: { trigger: 'axis', backgroundColor: 'rgba(255,255,255,0.95)', borderColor: '#c3c6d6' },
-      legend: { data: ['R²', 'MAE', 'RMSE'], top: 0 },
+      legend: { data: ['R²', 'MAE', 'RMSE'], top: 0, textStyle: { fontSize: 11 } },
       grid: { left: '3%', right: '4%', bottom: '10%', top: '15%', containLabel: true },
       xAxis: { type: 'category', data: models, axisLabel: { fontSize: 11, fontFamily: 'JetBrains Mono' } },
       yAxis: { type: 'value', splitLine: { lineStyle: { color: '#e1e2ec', type: 'dashed' } } },
       series: metrics.map((key, i) => ({
-        name: key.toUpperCase(),
+        name: metricLabels[key],
         type: 'bar',
         data: modelData.metrics.map((m) => m[key]),
         itemStyle: { color: metricColors[i], borderRadius: [4, 4, 0, 0] },
@@ -127,12 +128,12 @@ export default function ModelAnalysis() {
       { name: 'R²', max: 1 },
       { name: 'MAE', max: 100 },
       { name: 'RMSE', max: 100 },
-      { name: 'MAPE', max: 30 },
+      { name: 'MAPE', max: 25 },
     ];
     return {
       tooltip: {},
       legend: { bottom: 0, data: modelData.metrics.map((m) => m.model) },
-      radar: { indicator, center: ['50%', '43%'], radius: '68%', nameGap: 15 },
+      radar: { indicator, center: ['50%', '43%'], radius: '68%', axisNameGap: 15 },
       series: [{
         type: 'radar',
         data: modelData.metrics.map((m, i) => ({
@@ -156,7 +157,15 @@ export default function ModelAnalysis() {
     return {
       tooltip: {
         trigger: 'item',
-        formatter: (p) => `Actual: <b>${p.value[0]}</b><br/>Predicted: <b>${p.value[1]}</b>`,
+        backgroundColor: 'rgba(255,255,255,0.95)',
+        borderColor: '#c3c6d6',
+        formatter: (p) => {
+          const act = p.value[0], pred = p.value[1], err = (act - pred).toFixed(1);
+          return `<span style="color:#434654">真实:</span> <b>${act}</b><br/>` +
+            `<span style="color:#434654">预测:</span> <b>${pred}</b><br/>` +
+            `<span style="color:#434654">误差:</span> <b style="color:${Math.abs(err) > 100 ? '#DE350B' : '#191b23'}">${err}</b>` +
+            `<br/><span style="font-size:10px;color:#737685">偏差 ${(Math.abs(err)/act*100).toFixed(1)}%</span>`;
+        },
       },
       grid: { left: '14%', right: '8%', top: '8%', bottom: '18%' },
       xAxis: { type: 'value', name: '真实负荷 (Actual)', nameLocation: 'center', nameGap: 35, nameTextStyle: { fontSize: 11 }, splitLine: { lineStyle: { color: '#e1e2ec', type: 'dashed' } } },
@@ -194,17 +203,28 @@ export default function ModelAnalysis() {
       '夜晚': '#434654',
     };
     return {
-      tooltip: { trigger: 'item' },
       legend: { data: periods, top: 0, textStyle: { fontSize: 10 } },
       grid: { left: '10%', right: '8%', top: '20%', bottom: '18%' },
       xAxis: { type: 'value', name: '预测值', nameTextStyle: { fontSize: 11 }, splitLine: { lineStyle: { color: '#e1e2ec', type: 'dashed' } } },
       yAxis: { type: 'value', name: '残差', nameTextStyle: { fontSize: 11 }, splitLine: { lineStyle: { color: '#e1e2ec', type: 'dashed' } } },
+      tooltip: {
+        trigger: 'item',
+        backgroundColor: 'rgba(255,255,255,0.95)',
+        borderColor: '#c3c6d6',
+        formatter: (p) => {
+          const pred = p.value[0], res = p.value[1];
+          return `<span style="color:#434654">预测:</span> <b>${pred}</b><br/>` +
+            `<span style="color:#434654">残差:</span> <b style="color:${Math.abs(res) > 50 ? '#DE350B' : '#191b23'}">${res.toFixed(1)}</b>` +
+            `<br/><span style="font-size:10px;color:#737685">${p.seriesName}</span>`;
+        },
+      },
       series: periods.map((p) => ({
         name: p,
         type: 'scatter',
-        data: errorData.residuals.filter((r) => r.hour_period === p).map((r) => [r.predicted, r.residual]),
-        symbolSize: 4,
+        data: errorData.residuals.filter((r) => r.hour_period === p).map((r) => [r.predicted, r.residual, Math.abs(r.residual)]),
+        symbolSize: (val) => Math.max(3, Math.min(14, Math.abs(val[2]) * 0.05 + 3)),
         itemStyle: { color: periodColors[p], opacity: 0.5 },
+        emphasis: { itemStyle: { opacity: 1, borderColor: '#191b23', borderWidth: 1 } },
       })),
       markLine: { silent: true, data: [{ yAxis: 0, lineStyle: { color: theme.colors.errorHigh, type: 'dashed' } }] },
     };
@@ -274,10 +294,18 @@ export default function ModelAnalysis() {
   return (
     <>
       {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <Alert
+          type="info"
+          showIcon
+          message="分析任务：模型分析"
+          description="对比 MLP、RandomForest、MLP+RF、DecisionTree 四个模型的预测性能，分析残差分布模式与特征重要性排序，识别最优模型及其适用场景。"
+          style={{ borderRadius: 8, border: `1px solid ${theme.colors.primaryFixedDim}` }}
+        />
+      </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
           <h2 style={{ fontFamily: 'IBM Plex Sans', fontSize: 24, fontWeight: 600, margin: 0 }}>模型分析 (Model Analysis)</h2>
-          <Text type="secondary">评估不同机器学习模型在电力负荷预测上的表现差异，并进行残差与特征重要性分析。</Text>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <Select value={selectedModel} onChange={handleModelChange} style={{ width: 200 }}
