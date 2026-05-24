@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import React, { useMemo, useState, useCallback, useRef } from 'react';
 import { Row, Col, Select, Button, Segmented, Spin, Alert, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
@@ -28,8 +28,6 @@ echarts.use([
 ]);
 
 const { Text } = Typography;
-
-const BRUSH_GROUP = 'feature-brush-group';
 
 // Axis label name mapping
 const AXIS_NAMES = {
@@ -79,32 +77,6 @@ export default function FeatureExploration() {
 
   // Refs for chart instances
   const parallelRef = useRef(null);
-  const scatterRef = useRef(null);
-
-  // Connect charts for brush linking after mount
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const instances = [];
-      if (parallelRef.current) {
-        const inst = parallelRef.current.getEchartsInstance();
-        if (inst) instances.push(inst);
-      }
-      if (scatterRef.current) {
-        const inst = scatterRef.current.getEchartsInstance();
-        if (inst) instances.push(inst);
-      }
-      if (instances.length >= 2) {
-        echarts.connect(BRUSH_GROUP);
-        instances.forEach((inst) => {
-          try { inst.group = BRUSH_GROUP; } catch (_) { /* connect handles grouping */ }
-        });
-      }
-    }, 500);
-    return () => {
-      clearTimeout(timer);
-      echarts.disconnect(BRUSH_GROUP);
-    };
-  }, [data]);
 
   // ---- 1. Correlation Heatmap ----
   const heatmapOption = useMemo(() => {
@@ -312,12 +284,6 @@ export default function FeatureExploration() {
           return p.seriesName ? `${base}<br/><span style="font-size:11px;color:#737685">时段: ${p.seriesName}</span>` : base;
         },
       },
-      brush: {
-        toolbox: ['rect', 'polygon', 'clear'],
-        brushLink: [0, 1],
-        throttleType: 'debounce',
-        throttleDelay: 300,
-      },
       grid: { left: '10%', right: '5%', top: showLegend ? '15%' : '10%', bottom: '15%' },
       xAxis: {
         type: 'value', name: AXIS_NAMES[scatterX] || scatterX,
@@ -333,7 +299,7 @@ export default function FeatureExploration() {
     };
   }, [data, brushData, scatterX, scatterY, brushIndices, colorBy]);
 
-  // Handle brush events
+  // Handle parallel-coords brush → filter scatter data by matching dataIndex
   const onParallelEvents = useCallback((events) => {
     if (events?.brushSelected) {
       const batch = events.brushSelected.batch;
@@ -346,35 +312,13 @@ export default function FeatureExploration() {
         }
       }
     }
-    if (events?.brushEnd || events?.globalout) {
-      const parallelInst = parallelRef.current?.getEchartsInstance();
-      if (!parallelInst) return;
-      const info = parallelInst.getOption().brush;
-      // No selection → reset
-      if (!info || !info.length || !info[0]?.selected) {
-        setBrushIndices(null);
-      }
-    }
-  }, []);
-
-  const onScatterEvents = useCallback((events) => {
-    if (events?.brushSelected) {
-      const batch = events.brushSelected.batch;
-      if (batch && batch.length > 0) {
-        const selected = batch[0].selected;
-        if (selected && selected.length > 0) {
-          const indices = selected[0].dataIndex || [];
-          setBrushIndices(indices.length > 0 ? indices : null);
-          return;
-        }
-      }
-    }
-    if (events?.brushEnd || events?.globalout) {
-      const scatterInst = scatterRef.current?.getEchartsInstance();
-      if (!scatterInst) return;
-      const info = scatterInst.getOption().brush;
-      if (!info || !info.length || !info[0]?.selected) {
-        setBrushIndices(null);
+    // When brush is cleared
+    if (events?.brushEnd) {
+      const inst = parallelRef.current?.getEchartsInstance();
+      if (inst) {
+        const opt = inst.getOption();
+        const hasSelection = opt.brush && opt.brush[0] && opt.brush[0].selected;
+        if (!hasSelection) setBrushIndices(null);
       }
     }
   }, []);
@@ -587,12 +531,10 @@ export default function FeatureExploration() {
             {loading ? <Spin style={{ display:'block', margin:'160px auto' }} /> :
               scatterOption ? (
                 <ReactEChartsCore
-                  ref={scatterRef}
                   echarts={echarts}
                   option={scatterOption}
                   style={{ height: 400 }}
                   notMerge
-                  onEvents={onScatterEvents}
                 />
               ) : null}
           </ChartCard>
