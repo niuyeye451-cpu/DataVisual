@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { Row, Col, Select, Button, Spin, Alert, Typography, Card } from 'antd';
 import { DownloadOutlined, BarChartOutlined, RadarChartOutlined, DotChartOutlined } from '@ant-design/icons';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
@@ -44,6 +44,59 @@ export default function ModelAnalysis() {
   const { data: modelData, loading: ml, error: me } = useFetch(fetchModels);
   const { data: errorData, loading: el } = useFetch(() => fetchErrors(selectedModel), [selectedModel]);
   const { data: featureData, loading: fl } = useFetch(fetchFeatures);
+
+  const exportReport = useCallback(() => {
+    const sections = [];
+    const BOM = '﻿';
+
+    // Section 1: Model Metrics
+    if (modelData?.metrics?.length) {
+      sections.push('=== 模型指标对比 ===');
+      sections.push('Model,R²,MAE,RMSE,MAPE');
+      for (const m of modelData.metrics) {
+        sections.push(`${m.model},${m.r2},${m.mae},${m.rmse},${m.mape ?? '-'}`);
+      }
+    }
+
+    // Section 2: Feature Importance
+    if (featureData?.importance?.length) {
+      sections.push('');
+      sections.push('=== 特征重要性 ===');
+      sections.push('Feature,Importance');
+      for (const f of featureData.importance) {
+        sections.push(`${f.feature},${f.importance}`);
+      }
+    }
+
+    // Section 3: Prediction Samples (top 500)
+    if (modelData?.predictions?.length) {
+      sections.push('');
+      sections.push('=== 预测样本 (Top 500) ===');
+      sections.push('Time,Hour Period,Actual,MLP Pred,RF Pred,MLP+RF Pred,DT Pred');
+      for (const p of modelData.predictions.slice(0, 500)) {
+        sections.push(`"${p.time}",${p.hour_period},${p.actual},${p.mlp_pred},${p.rf_pred},${p.mlp_rf_pred},${p.dt_pred}`);
+      }
+    }
+
+    // Section 4: Error Analysis
+    if (errorData?.residuals?.length) {
+      sections.push('');
+      sections.push('=== 误差分析 ===');
+      sections.push('Time,Hour Period,Actual,Predicted,Residual,Abs Error,% Error');
+      for (const r of errorData.residuals.slice(0, 500)) {
+        sections.push(`"${r.time}",${r.hour_period},${r.actual},${r.predicted},${r.residual},${r.abs_error},${r.percentage_error}`);
+      }
+    }
+
+    const csv = BOM + sections.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'model_analysis_report.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [modelData, errorData, featureData]);
 
   // ---- 1. Grouped Bar Chart ----
   const barOption = useMemo(() => {
@@ -235,7 +288,7 @@ export default function ModelAnalysis() {
               { value: 'dt', label: 'DecisionTree' },
             ]}
           />
-          <Button type="primary" icon={<DownloadOutlined />}>导出报告</Button>
+          <Button type="primary" icon={<DownloadOutlined />} onClick={exportReport}>导出报告</Button>
         </div>
       </div>
 

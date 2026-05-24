@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { Row, Col, Table, Tag, Button, Space, DatePicker, Spin, Alert } from 'antd';
 import {
   DatabaseOutlined,
@@ -43,6 +43,20 @@ const periodColor = {
 
 export default function DataOverview() {
   const { data, loading, error, refetch } = useFetch(fetchOverview);
+
+  const exportCSV = useCallback(() => {
+    if (!data?.time_series?.length) return;
+    const header = 'Time,Load (kWh)';
+    const rows = data.time_series.map((d) => `"${d.time}",${d.load}`);
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'load_data.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [data]);
 
   const timeSeriesOption = useMemo(() => {
     if (!data?.time_series) return null;
@@ -165,7 +179,7 @@ export default function DataOverview() {
               <Button type="primary" icon={<ReloadOutlined />} onClick={refetch} size="small">
                 Refresh Data
               </Button>
-              <Button icon={<DownloadOutlined />} size="small">
+              <Button icon={<DownloadOutlined />} size="small" onClick={exportCSV}>
                 Export CSV
               </Button>
             </Space>
