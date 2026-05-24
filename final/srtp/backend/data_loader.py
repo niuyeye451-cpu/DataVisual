@@ -220,7 +220,7 @@ def get_all_data():
     time_series = [{"time": t, "load": l} for t, l in zip(times, loads)]
 
     # ---- Correlation matrix ----
-    cols_for_corr = ["radiation", "temperature", "relative_humidity", "L_h_minus_24", "L_h_minus_1", "T_h_minus_1", "hourly_load"]
+    cols_for_corr = ["radiation", "temperature", "relative_humidity", "L_h_minus_24", "L_h_minus_1", "T_h_minus_1", "hourly_load", "hour"]
     corr_df = df[cols_for_corr].corr()
     correlation_matrix = corr_df.values.round(2).tolist()
 

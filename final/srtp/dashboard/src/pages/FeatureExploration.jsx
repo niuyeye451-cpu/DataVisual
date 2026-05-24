@@ -40,7 +40,24 @@ const AXIS_NAMES = {
   L_h_minus_1: 'L(h-1)',
   T_h_minus_1: 'T(h-1)',
   hourly_load: '逐时负荷',
+  hour: '小时',
 };
+
+const hourPeriod = (h) => {
+  if (h < 6) return '凌晨';
+  if (h < 12) return '上午';
+  if (h < 18) return '下午';
+  return '夜晚';
+};
+
+const PERIOD_COLORS = {
+  '凌晨': '#0052cc',
+  '上午': '#FF8B00',
+  '下午': '#DE350B',
+  '夜晚': '#434654',
+};
+
+const PERIOD_NAMES_ZH = ['凌晨 (0-6)', '上午 (6-12)', '下午 (12-18)', '夜晚 (18-24)'];
 
 export default function FeatureExploration() {
   const { data, loading, error } = useFetch(fetchEda);
@@ -49,6 +66,7 @@ export default function FeatureExploration() {
   const [distFeature, setDistFeature] = useState('radiation');
   const [distView, setDistView] = useState('all');
   const [brushIndices, setBrushIndices] = useState(null);
+  const [colorBy, setColorBy] = useState('period'); // 'none' | 'period' | 'load'
 
   // Shared data array for brush-linked charts (downsampled for visual clarity)
   const brushData = useMemo(() => {
@@ -226,24 +244,73 @@ export default function FeatureExploration() {
   // ---- 4. Scatter Plot (shares brushData with parallel coords, linked via brush) ----
   const scatterOption = useMemo(() => {
     if (!data?.feature_stats || !brushData.length || !data?.columns) return null;
-    const xIdx = data.columns.indexOf(scatterX);
-    const yIdx = data.columns.indexOf(scatterY);
+    const cols = data.columns;
+    const xIdx = cols.indexOf(scatterX);
+    const yIdx = cols.indexOf(scatterY);
+    const hourIdx = cols.indexOf('hour');
     if (xIdx === -1 || yIdx === -1) return null;
 
     let src = brushData;
-    // Filter by brush selection
     if (brushIndices && brushIndices.length > 0) {
       src = brushData.filter((_, i) => brushIndices.includes(i));
     }
 
-    const points = src.map((row) => [row[xIdx], row[yIdx]]);
+    const buildSeries = () => {
+      if (colorBy === 'period' && hourIdx >= 0) {
+        // 4 series, one per period
+        const groups = { '凌晨': [], '上午': [], '下午': [], '夜晚': [] };
+        for (const row of src) {
+          const h = row[hourIdx];
+          const p = hourPeriod(h);
+          groups[p].push([row[xIdx], row[yIdx]]);
+        }
+        return Object.entries(groups).map(([period, pts]) => ({
+          name: period,
+          type: 'scatter',
+          data: pts,
+          symbolSize: 4,
+          itemStyle: { color: PERIOD_COLORS[period], opacity: 0.5 },
+          emphasis: { itemStyle: { opacity: 1, borderColor: '#191b23', borderWidth: 1 } },
+        }));
+      }
+      if (colorBy === 'load') {
+        // 2 series: low load (<300) and high load (>=300)
+        const Y_NAME = 'hourly_load';
+        const yIdx2 = cols.indexOf(Y_NAME);
+        const low = [], high = [];
+        for (const row of src) {
+          const load = yIdx2 >= 0 ? row[yIdx2] : row[yIdx];
+          if (load < 300) low.push([row[xIdx], row[yIdx]]);
+          else high.push([row[xIdx], row[yIdx]]);
+        }
+        return [
+          { name: '低负荷 (<300)', type: 'scatter', data: low, symbolSize: 4, itemStyle: { color: '#0052cc', opacity: 0.5 }, emphasis: { itemStyle: { opacity: 1 } } },
+          { name: '高负荷 (≥300)', type: 'scatter', data: high, symbolSize: 4, itemStyle: { color: '#DE350B', opacity: 0.5 }, emphasis: { itemStyle: { opacity: 1 } } },
+        ];
+      }
+      // 'none': single series
+      return [{
+        type: 'scatter',
+        data: src.map((row) => [row[xIdx], row[yIdx]]),
+        symbolSize: 4,
+        itemStyle: { color: theme.colors.loadPrimary, opacity: 0.5 },
+        emphasis: { itemStyle: { opacity: 1, borderColor: '#191b23', borderWidth: 1 } },
+      }];
+    };
+
+    const seriesArr = buildSeries();
+    const showLegend = colorBy !== 'none';
+
     return {
+      ...(showLegend ? { legend: { top: 5, data: seriesArr.map((s) => s.name), textStyle: { fontSize: 10 } } } : {}),
       tooltip: {
         trigger: 'item',
         backgroundColor: 'rgba(255,255,255,0.95)',
         borderColor: '#c3c6d6',
-        formatter: (p) =>
-          `<span style="font-size:12px;color:#434654">${scatterX}:</span> <b>${p.value[0]}</b><br/><span style="font-size:12px;color:#434654">${scatterY}:</span> <b>${p.value[1]}</b>`,
+        formatter: (p) => {
+          const base = `<span style="font-size:12px;color:#434654">${AXIS_NAMES[scatterX] || scatterX}:</span> <b>${p.value[0]}</b><br/><span style="font-size:12px;color:#434654">${AXIS_NAMES[scatterY] || scatterY}:</span> <b>${p.value[1]}</b>`;
+          return p.seriesName ? `${base}<br/><span style="font-size:11px;color:#737685">时段: ${p.seriesName}</span>` : base;
+        },
       },
       brush: {
         toolbox: ['rect', 'polygon', 'clear'],
@@ -251,7 +318,7 @@ export default function FeatureExploration() {
         throttleType: 'debounce',
         throttleDelay: 300,
       },
-      grid: { left: '10%', right: '5%', top: '10%', bottom: '15%' },
+      grid: { left: '10%', right: '5%', top: showLegend ? '15%' : '10%', bottom: '15%' },
       xAxis: {
         type: 'value', name: AXIS_NAMES[scatterX] || scatterX,
         nameTextStyle: { fontSize: 11, color: '#434654' },
@@ -262,15 +329,9 @@ export default function FeatureExploration() {
         nameTextStyle: { fontSize: 11, color: '#434654' },
         splitLine: { lineStyle: { color: '#e1e2ec', type: 'dashed' } },
       },
-      series: [{
-        type: 'scatter',
-        data: points,
-        symbolSize: 4,
-        itemStyle: { color: theme.colors.loadPrimary, opacity: 0.5 },
-        emphasis: { itemStyle: { opacity: 1, borderColor: '#191b23', borderWidth: 1 } },
-      }],
+      series: seriesArr,
     };
-  }, [data, brushData, scatterX, scatterY, brushIndices]);
+  }, [data, brushData, scatterX, scatterY, brushIndices, colorBy]);
 
   // Handle brush events
   const onParallelEvents = useCallback((events) => {
@@ -491,19 +552,31 @@ export default function FeatureExploration() {
           <ChartCard
             title="特征-负荷散点图"
             extra={
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <Text type="secondary" style={{ fontSize: 12 }}>X:</Text>
-                  <Select value={scatterX} onChange={setScatterX} size="small" style={{ width: 160, fontFamily: 'JetBrains Mono' }}
-                    options={featureNames.map((n) => ({ value: n, label: AXIS_NAMES[n] || n }))} />
+                  <Select value={scatterX} onChange={setScatterX} size="small" style={{ width: 140, fontFamily: 'JetBrains Mono' }}
+                    options={featureNames.filter(n => n !== 'hour').map((n) => ({ value: n, label: AXIS_NAMES[n] || n }))} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <Text type="secondary" style={{ fontSize: 12 }}>Y:</Text>
-                  <Select value={scatterY} onChange={setScatterY} size="small" style={{ width: 160, fontFamily: 'JetBrains Mono' }}
-                    options={featureNames.map((n) => ({ value: n, label: AXIS_NAMES[n] || n }))} />
+                  <Select value={scatterY} onChange={setScatterY} size="small" style={{ width: 140, fontFamily: 'JetBrains Mono' }}
+                    options={featureNames.filter(n => n !== 'hour').map((n) => ({ value: n, label: AXIS_NAMES[n] || n }))} />
                 </div>
-                <Button size="small" icon={<ReloadOutlined />} onClick={() => { setScatterX('temperature'); setScatterY('hourly_load'); setBrushIndices(null); }}>
-                  重置筛选
+                <div style={{ width: 1, height: 20, background: '#c3c6d6' }} />
+                <Text type="secondary" style={{ fontSize: 11 }}>颜色:</Text>
+                <Segmented
+                  size="small"
+                  value={colorBy}
+                  onChange={setColorBy}
+                  options={[
+                    { value: 'period', label: '按时段' },
+                    { value: 'load', label: '按负荷' },
+                    { value: 'none', label: '无' },
+                  ]}
+                />
+                <Button size="small" icon={<ReloadOutlined />} onClick={() => { setScatterX('temperature'); setScatterY('hourly_load'); setBrushIndices(null); setColorBy('period'); }}>
+                  重置
                 </Button>
                 {brushIndices && (
                   <TagStat label="已选" value={brushIndices.length} color={theme.colors.errorHigh} />
