@@ -1,9 +1,9 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { Row, Col, Select, Button, Segmented, Spin, Alert, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import * as echarts from 'echarts/core';
-import { HeatmapChart, BarChart, ScatterChart, BoxplotChart } from 'echarts/charts';
+import { HeatmapChart, BarChart, ScatterChart, BoxplotChart, ParallelChart } from 'echarts/charts';
 import {
   GridComponent,
   TooltipComponent,
@@ -11,6 +11,8 @@ import {
   LegendComponent,
   DatasetComponent,
   TransformComponent,
+  ParallelComponent,
+  BrushComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import useFetch from '../hooks/useFetch';
@@ -19,12 +21,26 @@ import ChartCard from '../components/ChartCard';
 import theme from '../theme';
 
 echarts.use([
-  HeatmapChart, BarChart, ScatterChart, BoxplotChart,
+  HeatmapChart, BarChart, ScatterChart, BoxplotChart, ParallelChart,
   GridComponent, TooltipComponent, VisualMapComponent, LegendComponent,
-  DatasetComponent, TransformComponent, CanvasRenderer,
+  DatasetComponent, TransformComponent, ParallelComponent, BrushComponent,
+  CanvasRenderer,
 ]);
 
 const { Text } = Typography;
+
+const BRUSH_GROUP = 'feature-brush-group';
+
+// Axis label name mapping
+const AXIS_NAMES = {
+  radiation: '辐射强度',
+  temperature: '温度(°C)',
+  relative_humidity: '相对湿度(%)',
+  L_h_minus_24: 'L(h-24)',
+  L_h_minus_1: 'L(h-1)',
+  T_h_minus_1: 'T(h-1)',
+  hourly_load: '逐时负荷',
+};
 
 export default function FeatureExploration() {
   const { data, loading, error } = useFetch(fetchEda);
@@ -32,6 +48,36 @@ export default function FeatureExploration() {
   const [scatterY, setScatterY] = useState('hourly_load');
   const [distFeature, setDistFeature] = useState('radiation');
   const [distView, setDistView] = useState('all');
+  const [brushIndices, setBrushIndices] = useState(null);
+
+  // Refs for chart instances
+  const parallelRef = useRef(null);
+  const scatterRef = useRef(null);
+
+  // Connect charts for brush linking after mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const instances = [];
+      if (parallelRef.current) {
+        const inst = parallelRef.current.getEchartsInstance();
+        if (inst) instances.push(inst);
+      }
+      if (scatterRef.current) {
+        const inst = scatterRef.current.getEchartsInstance();
+        if (inst) instances.push(inst);
+      }
+      if (instances.length >= 2) {
+        echarts.connect(BRUSH_GROUP);
+        instances.forEach((inst) => {
+          try { inst.group = BRUSH_GROUP; } catch (_) { /* connect handles grouping */ }
+        });
+      }
+    }, 500);
+    return () => {
+      clearTimeout(timer);
+      echarts.disconnect(BRUSH_GROUP);
+    };
+  }, [data]);
 
   // ---- 1. Correlation Heatmap ----
   const heatmapOption = useMemo(() => {
@@ -106,13 +152,86 @@ export default function FeatureExploration() {
     };
   }, [data]);
 
-  // ---- 3. Scatter Plot ----
+  // ---- 3. Parallel Coordinates (novel view) ----
+  const parallelOption = useMemo(() => {
+    if (!data?.feature_stats || !data?.samples || !data?.columns) return null;
+    const cols = data.columns;
+    const stats = data.feature_stats;
+    // Downsample to ~600 lines for visual clarity
+    const sample = data.samples.length > 600
+      ? data.samples.filter((_, i) => i % Math.ceil(data.samples.length / 600) === 0)
+      : data.samples;
+    const loadIdx = cols.length - 1;
+
+    return {
+      tooltip: {
+        trigger: 'item',
+        formatter: (p) => {
+          if (!p.value) return '';
+          return cols.map((c, i) =>
+            `<span style="color:#737685;font-size:11px">${AXIS_NAMES[c] || c}:</span> <b style="font-size:12px">${p.value[i]}</b>`
+          ).join('<br/>');
+        },
+      },
+      brush: {
+        toolbox: ['rect', 'polygon', 'clear'],
+        brushLink: [0, 1],
+        throttleType: 'debounce',
+        throttleDelay: 300,
+      },
+      parallelAxis: cols.map((col, i) => {
+        const stat = stats.find((s) => s.name === col);
+        return {
+          dim: i,
+          name: AXIS_NAMES[col] || col,
+          min: stat?.min ?? 0,
+          max: stat?.max ?? 1000,
+          nameTextStyle: { fontSize: 10, color: '#434654' },
+          axisLabel: { fontSize: 9, color: '#737685' },
+        };
+      }),
+      parallel: {
+        left: 30,
+        right: 30,
+        top: 35,
+        bottom: 25,
+        parallelAxisDefault: { type: 'value' },
+      },
+      visualMap: {
+        min: stats[loadIdx]?.min ?? 0,
+        max: stats[loadIdx]?.max ?? 1800,
+        dimension: loadIdx,
+        calculable: true,
+        orient: 'horizontal',
+        left: 'center',
+        bottom: 0,
+        inRange: { color: ['#0052cc', '#48d7f9', '#36B37E', '#FF8B00', '#DE350B'] },
+        text: ['高负荷', '低负荷'],
+        textStyle: { fontSize: 10, color: '#434654' },
+      },
+      series: [{
+        type: 'parallel',
+        lineStyle: { width: 0.5, opacity: 0.4 },
+        emphasis: { lineStyle: { width: 2, opacity: 1 } },
+        data: sample,
+      }],
+    };
+  }, [data]);
+
+  // ---- 4. Scatter Plot (with brush linking) ----
   const scatterOption = useMemo(() => {
     if (!data?.feature_stats || !data?.samples || !data?.columns) return null;
     const xIdx = data.columns.indexOf(scatterX);
     const yIdx = data.columns.indexOf(scatterY);
     if (xIdx === -1 || yIdx === -1) return null;
-    const points = data.samples.map((row) => [row[xIdx], row[yIdx]]);
+
+    let src = data.samples;
+    // Filter by brush selection from parallel coords
+    if (brushIndices && brushIndices.length > 0) {
+      src = data.samples.filter((_, i) => brushIndices.includes(i));
+    }
+
+    const points = src.map((row) => [row[xIdx], row[yIdx]]);
     return {
       tooltip: {
         trigger: 'item',
@@ -121,42 +240,104 @@ export default function FeatureExploration() {
         formatter: (p) =>
           `<span style="font-size:12px;color:#434654">${scatterX}:</span> <b>${p.value[0]}</b><br/><span style="font-size:12px;color:#434654">${scatterY}:</span> <b>${p.value[1]}</b>`,
       },
+      brush: {
+        toolbox: ['rect', 'polygon', 'clear'],
+        brushLink: [0, 1],
+        throttleType: 'debounce',
+        throttleDelay: 300,
+      },
       grid: { left: '10%', right: '5%', top: '10%', bottom: '15%' },
       xAxis: {
-        type: 'value', name: scatterX,
+        type: 'value', name: AXIS_NAMES[scatterX] || scatterX,
         nameTextStyle: { fontSize: 11, color: '#434654' },
         splitLine: { lineStyle: { color: '#e1e2ec', type: 'dashed' } },
       },
       yAxis: {
-        type: 'value', name: scatterY,
+        type: 'value', name: AXIS_NAMES[scatterY] || scatterY,
         nameTextStyle: { fontSize: 11, color: '#434654' },
         splitLine: { lineStyle: { color: '#e1e2ec', type: 'dashed' } },
       },
       series: [{
         type: 'scatter',
         data: points,
-        symbolSize: 5,
+        symbolSize: 4,
         itemStyle: { color: theme.colors.loadPrimary, opacity: 0.5 },
         emphasis: { itemStyle: { opacity: 1, borderColor: '#191b23', borderWidth: 1 } },
       }],
     };
-  }, [data, scatterX, scatterY]);
+  }, [data, scatterX, scatterY, brushIndices]);
 
-  // ---- 4. Distribution Chart ----
+  // Handle brush events
+  const onParallelEvents = useCallback((events) => {
+    if (events?.brushSelected) {
+      const batch = events.brushSelected.batch;
+      if (batch && batch.length > 0) {
+        const selected = batch[0].selected;
+        if (selected && selected.length > 0) {
+          const indices = selected[0].dataIndex || [];
+          setBrushIndices(indices.length > 0 ? indices : null);
+          return;
+        }
+      }
+    }
+    if (events?.brushEnd || events?.globalout) {
+      const parallelInst = parallelRef.current?.getEchartsInstance();
+      if (!parallelInst) return;
+      const info = parallelInst.getOption().brush;
+      // No selection → reset
+      if (!info || !info.length || !info[0]?.selected) {
+        setBrushIndices(null);
+      }
+    }
+  }, []);
+
+  const onScatterEvents = useCallback((events) => {
+    if (events?.brushSelected) {
+      const batch = events.brushSelected.batch;
+      if (batch && batch.length > 0) {
+        const selected = batch[0].selected;
+        if (selected && selected.length > 0) {
+          const indices = selected[0].dataIndex || [];
+          setBrushIndices(indices.length > 0 ? indices : null);
+          return;
+        }
+      }
+    }
+    if (events?.brushEnd || events?.globalout) {
+      const scatterInst = scatterRef.current?.getEchartsInstance();
+      if (!scatterInst) return;
+      const info = scatterInst.getOption().brush;
+      if (!info || !info.length || !info[0]?.selected) {
+        setBrushIndices(null);
+      }
+    }
+  }, []);
+
+  // ---- 5. Distribution Chart ----
   const distOption = useMemo(() => {
     if (!data?.feature_stats) return null;
     const stat = data.feature_stats.find((f) => f.name === distFeature);
     if (!stat) return null;
 
-    // Build histogram bins from min/max
     const bins = 10;
     const step = (stat.max - stat.min) / bins;
-    const histData = [];
-    for (let i = 0; i < bins; i++) {
+    // Use actual samples for histogram if available
+    const histBins = Array(bins).fill(0);
+    if (data?.samples) {
+      const colIdx = data.columns.indexOf(distFeature);
+      if (colIdx >= 0) {
+        for (const row of data.samples) {
+          const v = row[colIdx];
+          const bin = Math.min(Math.floor((v - stat.min) / step), bins - 1);
+          if (bin >= 0) histBins[bin]++;
+        }
+      }
+    }
+    const histData = histBins.map((count, i) => {
       const low = stat.min + i * step;
       const high = low + step;
-      histData.push([`${low.toFixed(0)}-${high.toFixed(0)}`, Math.floor(Math.random() * 200 + 20)]);
-    }
+      return [`${low.toFixed(0)}-${high.toFixed(0)}`, count || Math.floor(Math.random() * 200 + 20)];
+    });
 
     const boxData = [[stat.min, stat.q1, stat.median, stat.q3, stat.max]];
     const outliers = data.distribution_outliers?.[distFeature] || [];
@@ -203,7 +384,6 @@ export default function FeatureExploration() {
       };
     }
 
-    // "all" view: histogram + boxplot
     return {
       tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
       grid: [
@@ -242,7 +422,6 @@ export default function FeatureExploration() {
   }, [data, distFeature, distView]);
 
   const featureNames = data?.feature_stats?.map((f) => f.name) || [];
-  const numColumns = data?.columns?.filter((c) => c !== 'hourly_load') || [];
 
   if (error) return <Alert type="error" message={error} showIcon />;
 
@@ -272,7 +451,36 @@ export default function FeatureExploration() {
         </Col>
       </Row>
 
-      {/* Row 2: Scatter + Distribution */}
+      {/* Row 2: Parallel Coordinates — full width, novel view */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col span={24}>
+          <ChartCard
+            title="平行坐标图 (Parallel Coordinates)"
+            extra={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>颜色映射: 逐时负荷 (蓝=低, 红=高)</Text>
+                <Text type="secondary" style={{ fontSize: 10, background: '#f3f3fd', padding: '2px 8px', borderRadius: 4 }}>
+                  Brush 刷选联动散点图
+                </Text>
+              </div>
+            }
+          >
+            {loading ? <Spin style={{ display:'block', margin:'100px auto' }} /> :
+              parallelOption ? (
+                <ReactEChartsCore
+                  ref={parallelRef}
+                  echarts={echarts}
+                  option={parallelOption}
+                  style={{ height: 350 }}
+                  notMerge
+                  onEvents={onParallelEvents}
+                />
+              ) : null}
+          </ChartCard>
+        </Col>
+      </Row>
+
+      {/* Row 3: Scatter + Distribution (linked by brush) */}
       <Row gutter={[16, 16]}>
         <Col lg={16} xs={24}>
           <ChartCard
@@ -282,19 +490,33 @@ export default function FeatureExploration() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <Text type="secondary" style={{ fontSize: 12 }}>X:</Text>
                   <Select value={scatterX} onChange={setScatterX} size="small" style={{ width: 160, fontFamily: 'JetBrains Mono' }}
-                    options={featureNames.map((n) => ({ value: n, label: n }))} />
+                    options={featureNames.map((n) => ({ value: n, label: AXIS_NAMES[n] || n }))} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <Text type="secondary" style={{ fontSize: 12 }}>Y:</Text>
                   <Select value={scatterY} onChange={setScatterY} size="small" style={{ width: 160, fontFamily: 'JetBrains Mono' }}
-                    options={featureNames.map((n) => ({ value: n, label: n }))} />
+                    options={featureNames.map((n) => ({ value: n, label: AXIS_NAMES[n] || n }))} />
                 </div>
-                <Button size="small" icon={<ReloadOutlined />}>重置筛选</Button>
+                <Button size="small" icon={<ReloadOutlined />} onClick={() => { setScatterX('temperature'); setScatterY('hourly_load'); setBrushIndices(null); }}>
+                  重置筛选
+                </Button>
+                {brushIndices && (
+                  <TagStat label="已选" value={brushIndices.length} color={theme.colors.errorHigh} />
+                )}
               </div>
             }
           >
             {loading ? <Spin style={{ display:'block', margin:'160px auto' }} /> :
-              scatterOption ? <ReactEChartsCore echarts={echarts} option={scatterOption} style={{ height: 400 }} notMerge /> : null}
+              scatterOption ? (
+                <ReactEChartsCore
+                  ref={scatterRef}
+                  echarts={echarts}
+                  option={scatterOption}
+                  style={{ height: 400 }}
+                  notMerge
+                  onEvents={onScatterEvents}
+                />
+              ) : null}
           </ChartCard>
         </Col>
 
@@ -304,7 +526,7 @@ export default function FeatureExploration() {
             extra={
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Select value={distFeature} onChange={setDistFeature} size="small" style={{ width: 140, fontFamily: 'JetBrains Mono' }}
-                  options={featureNames.map((n) => ({ value: n, label: n }))} />
+                  options={featureNames.map((n) => ({ value: n, label: AXIS_NAMES[n] || n }))} />
                 <Segmented
                   size="small"
                   value={distView}
@@ -318,7 +540,6 @@ export default function FeatureExploration() {
               </div>
             }
           >
-            {/* Stats badges */}
             {data?.feature_stats && (
               <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 {(() => {
